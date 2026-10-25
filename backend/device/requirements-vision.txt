@@ -1,0 +1,4 @@
+-r requirements.txt
+# Confirmar wheels/pacotes do SO e arquitetura do Pi antes de instalar.
+numpy>=1.26,<3
+opencv-python-headless>=4.10,<5

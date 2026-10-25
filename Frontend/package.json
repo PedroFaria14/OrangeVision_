@@ -1,0 +1,47 @@
+{
+  "name": "orangevision-functional-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5174 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:e2e": "yarn build && playwright test",
+    "test:proxy": "node --experimental-strip-types --test tests/dev-api-proxy.check.ts"
+  },
+  "dependencies": {
+    "@date-fns/tz": "^1.5.0",
+    "@tanstack/react-query": "^5.104.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@eslint/js": "9",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "9",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
+    "playwright-core": "1.64.1",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.0",
+    "typescript-eslint": "^8.71.2",
+    "vite": "^8.3.4"
+  }
+}

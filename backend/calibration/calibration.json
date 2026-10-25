@@ -1,0 +1,19 @@
+{
+  "version": "0.1-provisorio",
+  "color_space": "HSV_OPENCV",
+  "fruit_hsv_ranges": [
+    {"lower": [5, 65, 45], "upper": [25, 255, 255]}
+  ],
+  "abnormal_hsv_ranges": [
+    {"name": "escuro", "lower": [0, 0, 0], "upper": [179, 255, 65]},
+    {"name": "esverdeado", "lower": [35, 45, 35], "upper": [85, 255, 255]}
+  ],
+  "min_fruit_area_px": 4500,
+  "min_abnormal_region_area_px": 40,
+  "morphology_kernel_px": 5,
+  "scoring": {
+    "weights": {"abnormal_area_pct": 0.50, "circularity_penalty": 0.30, "asymmetry_pct": 0.20},
+    "approved_min_score": 75,
+    "attention_min_score": 45
+  }
+}

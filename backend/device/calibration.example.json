@@ -1,0 +1,16 @@
+{
+  "version": "DEFINIR_VERSAO_DE_CALIBRACAO",
+  "validated": false,
+  "minimum_fruit_area_pixels": null,
+  "fruit_hsv": [],
+  "orange_hsv": [],
+  "abnormal_hsv": [],
+  "score_rules": {
+    "orange_color_ratio": { "low": null, "high": null, "direction": "higher", "weight": null },
+    "abnormal_region_ratio": { "low": null, "high": null, "direction": "lower", "weight": null },
+    "circularity": { "low": null, "high": null, "direction": "higher", "weight": null },
+    "asymmetry": { "low": null, "high": null, "direction": "lower", "weight": null }
+  },
+  "attention_min_score": null,
+  "approval_min_score": null
+}

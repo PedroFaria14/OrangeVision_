@@ -1,0 +1,550 @@
+/* Escopo exclusivo da área autenticada, inclusive após navegar de volta ao site. */
+.shell {
+  --ink: #182230;
+  --muted: #526174;
+  --line: #dce2e9;
+  --accent: #f97316;
+  color: var(--ink);
+  background: #f4f6f8;
+  font:
+    15px/1.6 system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  margin: -8px;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas: 'sidebar topbar' 'sidebar workspace';
+  overflow-wrap: anywhere;
+}
+.shell,
+.shell * {
+  box-sizing: border-box;
+}
+.shell :where(a) {
+  color: #9a3c06;
+  text-underline-offset: 3px;
+}
+.shell :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+.shell :where(button, input, select, textarea) {
+  font: inherit;
+}
+.shell :where(button) {
+  min-height: 42px;
+  padding: 9px 16px;
+  border: 1px solid #b8c2ce;
+  border-radius: 7px;
+  background: white;
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.shell :where(button):hover:not(:disabled) {
+  background: #fff2e8;
+  border-color: #b84d0a;
+}
+.shell :where(button):disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.shell :where(button[type='submit']) {
+  background: var(--accent);
+  color: #1b2028;
+  border-color: #b34d08;
+}
+.shell :where(input, select, textarea) {
+  max-width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 11px;
+  color: var(--ink);
+  background: white;
+  border: 1px solid #9caabc;
+  border-radius: 6px;
+}
+.shell :where(input[type='file']) {
+  width: 100%;
+}
+.shell :where(label) {
+  font-weight: 600;
+}
+.shell :where(h1, h2, h3, p) {
+  margin-top: 0;
+}
+.shell :where(h1) {
+  font-size: clamp(1.7rem, 2.4vw, 2.25rem);
+  line-height: 1.25;
+  letter-spacing: -0.035em;
+  margin-bottom: 10px;
+}
+.shell :where(h2) {
+  font-size: 1.15rem;
+  line-height: 1.4;
+  margin-bottom: 14px;
+}
+.shell :where(h3) {
+  font-size: 1rem;
+}
+.shell :where(p) {
+  margin-bottom: 16px;
+}
+.shell :where(main > section > p, section > h1 + p) {
+  color: var(--muted);
+}
+.shell :where(main > section > section, main article) {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 24px;
+  margin: 22px 0;
+}
+.shell :where(main section section section) {
+  margin-top: 18px;
+}
+.shell :where(main img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.shell :where(main dl) {
+  margin: 0;
+}
+.shell :where(main dt) {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.shell :where(main dd) {
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+.shell :where(main code, main pre) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.shell :where([role='alert']) {
+  padding: 16px;
+  border: 1px solid #d59480;
+  border-left: 4px solid #b42318;
+  border-radius: 7px;
+  background: #fff5f1;
+  color: #7b2518;
+  margin: 16px 0;
+}
+.shell :where([role='status']) {
+  border-left: 3px solid #b8c2ce;
+  padding: 12px 16px;
+  background: #f4f6f8;
+}
+.shell .skip {
+  position: absolute;
+  left: 12px;
+  top: -100px;
+  z-index: 10;
+  padding: 12px;
+  background: white;
+  color: #182230;
+  border-radius: 6px;
+}
+.shell .skip:focus {
+  top: 12px;
+}
+.shell .sidebar {
+  grid-area: sidebar;
+  background: #1b2430;
+  color: #e8edf3;
+  padding: 32px 18px 20px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.shell .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: white;
+  font-size: 21px;
+  font-weight: 750;
+  text-decoration: none;
+  letter-spacing: -0.6px;
+  padding: 0 8px;
+}
+.shell .brand small {
+  display: block;
+  color: #b6c3d4;
+  font-size: 9px;
+  letter-spacing: 2px;
+  font-weight: 500;
+  margin-top: 3px;
+}
+.shell .brandMark {
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 0 9px;
+  font-size: 24px;
+}
+.shell .brandAccent {
+  color: #fb923c;
+}
+.shell .navLabel {
+  color: #a7b5c7;
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  margin: 48px 14px 12px;
+  font-weight: 600;
+}
+.shell .sidebar nav {
+  display: grid;
+  gap: 6px;
+}
+.shell .sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  border-radius: 7px;
+  padding: 11px 14px;
+  text-decoration: none;
+  color: #d7dfea;
+  font-weight: 500;
+}
+.shell .sidebar nav a:hover {
+  background: #2b3747;
+}
+.shell .sidebar nav a[aria-current='page'] {
+  background: var(--accent);
+  color: #171d26;
+  font-weight: 750;
+}
+.shell .navIcon {
+  font-size: 21px;
+  line-height: 1;
+  width: 22px;
+  text-align: center;
+}
+.shell .sidebarBottom {
+  margin-top: auto;
+  padding: 28px 14px 0;
+}
+.shell .sidebarBottom a {
+  color: #e8edf3;
+  font-size: 0.875rem;
+}
+.shell .sidebarBottom p {
+  color: #a7b5c7;
+  font-size: 0.75rem;
+  border-top: 1px solid #3b4656;
+  padding-top: 18px;
+  margin: 24px 0 0;
+}
+.shell .topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 32px;
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+  background: white;
+}
+.shell .workspaceLabel {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.shell .account {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+.shell .account a {
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 650;
+  max-width: 230px;
+  overflow-wrap: anywhere;
+}
+.shell .account small {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.shell .account button {
+  margin-left: 10px;
+  font-size: 0.8rem;
+}
+.shell .avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: #9a3c06;
+  background: #fff0e4;
+  font-weight: 700;
+}
+.shell .menuToggle {
+  display: none;
+}
+.shell .workspace {
+  grid-area: workspace;
+  min-width: 0;
+  padding: 34px clamp(16px, 3vw, 44px) 20px;
+  width: 100%;
+  max-width: 1600px;
+  justify-self: center;
+}
+.shell .footer {
+  padding: 28px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  margin-top: 32px;
+}
+.shell .filters {
+  margin: 24px 0;
+  padding: 20px 24px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.shell .filters fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.shell .filters legend {
+  font-size: 0.875rem;
+  font-weight: 650;
+  margin-bottom: 14px;
+}
+.shell .filterFields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 16px;
+}
+.shell .filterFields p {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+.shell .shortcuts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.shell .shortcuts button {
+  font-size: 0.8rem;
+  min-height: 36px;
+  padding: 5px 12px;
+}
+.shell .metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.shell .metric {
+  border: 1px solid var(--line);
+  border-top: 3px solid #ea580c;
+  border-radius: 8px;
+  padding: 20px;
+  background: #fffaf5;
+}
+.shell .metric dt {
+  font-weight: 600;
+  color: #7c3e17;
+}
+.shell .metric dd {
+  font-size: 2rem;
+  margin: 6px 0 0;
+  line-height: 1.2;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.shell .approved {
+  border-top-color: #15803d;
+  background: #f2faf5;
+}
+.shell .approved dt {
+  color: #166534;
+}
+.shell .attention {
+  border-top-color: #b45309;
+  background: #fffbef;
+}
+.shell .attention dt {
+  color: #854d0e;
+}
+.shell .review {
+  border-top-color: #b91c1c;
+  background: #fff6f5;
+}
+.shell .review dt {
+  color: #991b1b;
+}
+.shell .metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 50px;
+  margin-top: 20px;
+}
+.shell .metadata dd {
+  margin-bottom: 0;
+}
+.shell .tableScroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  margin: 18px 0;
+}
+.shell table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.shell caption {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: #f9fafb;
+}
+.shell :where(th, td) {
+  padding: 13px 16px;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  min-width: 100px;
+}
+.shell thead th {
+  background: #f0f3f6;
+  color: #3d4c5e;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+.shell tbody th {
+  font-weight: 550;
+}
+.shell tbody tr:hover {
+  background: #fffaf5;
+}
+.shell td a {
+  display: inline-block;
+  min-width: 120px;
+  padding-block: 6px;
+}
+.shell main nav {
+  margin-top: 20px;
+}
+@media (max-width: 1100px) {
+  .shell {
+    grid-template-columns: 216px minmax(0, 1fr);
+  }
+  .shell .filterFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .shell .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .shell .workspaceLabel {
+    display: none;
+  }
+  .shell .topbar {
+    justify-content: flex-end;
+  }
+}
+@media (max-width: 760px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas: 'topbar' 'sidebar' 'workspace';
+  }
+  .shell .topbar {
+    padding: 12px 16px;
+    gap: 10px;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .shell .menuToggle {
+    display: inline-block;
+    font-size: 0.8rem;
+  }
+  .shell .sidebar {
+    position: static;
+    height: auto;
+    padding: 20px 16px;
+  }
+  .shell .sidebar[data-open='false'] {
+    display: none;
+  }
+  .shell .navLabel {
+    margin-top: 24px;
+  }
+  .shell .sidebarBottom {
+    padding-top: 18px;
+  }
+  .shell .sidebarBottom p {
+    display: none;
+  }
+  .shell .workspace {
+    padding-top: 24px;
+  }
+  .shell .account {
+    gap: 8px;
+    flex: 1;
+    justify-content: flex-end;
+  }
+  .shell .account a {
+    max-width: 130px;
+  }
+  .shell .account button {
+    margin-left: 0;
+    padding-inline: 9px;
+    min-height: 44px;
+  }
+  .shell .avatar {
+    display: none;
+  }
+  .shell :where(main > section > section, main article) {
+    padding: 18px;
+  }
+  .shell .filters {
+    padding: 18px;
+  }
+  .shell .metric {
+    padding: 14px;
+  }
+  .shell .metric dd {
+    font-size: 1.6rem;
+  }
+  .shell :where(button) {
+    min-height: 44px;
+  }
+}
+@media (max-width: 420px) {
+  .shell .filterFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell .metrics {
+    gap: 10px;
+  }
+  .shell .account a {
+    max-width: 105px;
+  }
+}

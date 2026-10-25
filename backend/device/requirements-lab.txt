@@ -1,0 +1,4 @@
+-r requirements.txt
+# Bancada com janelas. Não instalar junto com opencv-python-headless.
+numpy>=1.26,<3
+opencv-python>=4.10,<5
