@@ -1,5 +1,6 @@
 import {
   Link,
+  NavLink,
   Navigate,
   Outlet,
   useLocation,
@@ -8,6 +9,7 @@ import {
 import { lazy, Suspense } from 'react';
 import { useSession } from '@/features/auth/hooks/useSession';
 import { useLogout } from '@/features/auth/hooks/useLogout';
+import styles from '@/shared/ui/public.module.css';
 
 const DashboardShell = lazy(() => import('./DashboardShell'));
 
@@ -24,92 +26,96 @@ function PublicLayout() {
   const auth = useSession();
   const logout = useLogout();
   return (
-    <>
-      <a href="#conteudo">Pular para o conteúdo</a>
-      <header>
-        <p>
-          <Link to="/">OrangeVision</Link>
-        </p>
-        {auth.session && (
-          <p>
-            Conta: {auth.session.user.name} ·{' '}
-            <Link to="/dashboard/perfil">Meu perfil</Link>
+    <div className={styles.shell}>
+      <>
+        <a href="#conteudo">Pular para o conteúdo</a>
+        <header className={styles.sidebar}>
+          <p className={styles.brand}>
+            <Link to="/">OrangeVision</Link>
           </p>
-        )}
-        <nav aria-label="Navegação principal">
-          <ul>
-            {[
-              ['/', 'Início'],
-              ['/projeto', 'O Projeto'],
-              ['/planejamento', 'Planejamento'],
-              ['/desenvolvimento', 'Desenvolvimento'],
-              ['/resultados', 'Resultados'],
-              ['/equipe', 'Equipe'],
-              ['/referencias', 'Referências'],
-            ].map(([to, label]) => (
-              <li key={to}>
-                <Link to={to}>{label}</Link>
-              </li>
-            ))}
-            {auth.session ? (
-              <>
-                <li>
-                  <Link to="/dashboard">Dashboard</Link>
-                </li>
-                <li>
-                  <Link to="/dashboard/historico">Histórico</Link>
-                </li>
-                <li>
-                  <Link to="/dashboard/inspecoes">Inspeções</Link>
-                </li>
-                <li>
-                  <Link to="/dashboard/amostras">Amostras</Link>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    disabled={logout.busy}
-                    onClick={() => void logout.signOut()}
-                  >
-                    Sair da conta
-                  </button>
-                </li>
-              </>
-            ) : (
-              <>
-                <li>
-                  <Link to="/login">Entrar</Link>
-                </li>
-                <li>
-                  <Link to="/registrar">Criar conta</Link>
-                </li>
-              </>
-            )}
-          </ul>
-        </nav>
-      </header>
-      <main id="conteudo" tabIndex={-1}>
-        {logout.failed ? (
-          <div role="alert">
+          {auth.session && (
             <p>
-              Conteúdo privado ocultado, mas não foi possível confirmar o
-              encerramento da sessão no servidor.
+              Conta: {auth.session.user.name} ·{' '}
+              <Link to="/dashboard/perfil">Meu perfil</Link>
             </p>
-            <button
-              disabled={logout.busy}
-              onClick={() => void logout.signOut()}
-            >
-              Tentar sair novamente
-            </button>
-          </div>
-        ) : (
-          <Outlet />
-        )}
-      </main>
-      <footer>
-        <p>OrangeVision · Protótipo acadêmico de inspeção visual externa.</p>
-      </footer>
-    </>
+          )}
+          <nav aria-label="Navegação principal">
+            <ul>
+              {[
+                ['/', 'Início'],
+                ['/projeto', 'O Projeto'],
+                ['/planejamento', 'Planejamento'],
+                ['/desenvolvimento', 'Desenvolvimento'],
+                ['/resultados', 'Resultados'],
+                ['/equipe', 'Equipe'],
+                ['/referencias', 'Referências'],
+              ].map(([to, label]) => (
+                <li key={to}>
+                  <NavLink to={to} end>
+                    {label}
+                  </NavLink>
+                </li>
+              ))}
+              {auth.session ? (
+                <>
+                  <li>
+                    <Link to="/dashboard">Dashboard</Link>
+                  </li>
+                  <li>
+                    <Link to="/dashboard/historico">Histórico</Link>
+                  </li>
+                  <li>
+                    <Link to="/dashboard/inspecoes">Inspeções</Link>
+                  </li>
+                  <li>
+                    <Link to="/dashboard/amostras">Amostras</Link>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      disabled={logout.busy}
+                      onClick={() => void logout.signOut()}
+                    >
+                      Sair da conta
+                    </button>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <Link to="/login">Entrar</Link>
+                  </li>
+                  <li>
+                    <Link to="/registrar">Criar conta</Link>
+                  </li>
+                </>
+              )}
+            </ul>
+          </nav>
+        </header>
+        <main id="conteudo" tabIndex={-1}>
+          {logout.failed ? (
+            <div role="alert">
+              <p>
+                Conteúdo privado ocultado, mas não foi possível confirmar o
+                encerramento da sessão no servidor.
+              </p>
+              <button
+                disabled={logout.busy}
+                onClick={() => void logout.signOut()}
+              >
+                Tentar sair novamente
+              </button>
+            </div>
+          ) : (
+            <Outlet />
+          )}
+        </main>
+        <footer>
+          <p>OrangeVision · Protótipo acadêmico de inspeção visual externa.</p>
+        </footer>
+      </>
+    </div>
   );
 }
 
