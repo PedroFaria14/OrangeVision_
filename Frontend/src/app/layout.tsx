@@ -93,6 +93,10 @@ function PublicLayout() {
             </ul>
           </nav>
         </header>
+        <div className={styles.topbar}>
+          <span>OrangeVision</span>
+          <Link to="/login">Entrar</Link>
+        </div>
         <main id="conteudo" tabIndex={-1}>
           {logout.failed ? (
             <div role="alert">
