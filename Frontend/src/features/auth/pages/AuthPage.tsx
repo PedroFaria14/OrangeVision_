@@ -3,6 +3,7 @@ import { Page } from '@/shared/ui/Page';
 import { login, register } from '../api/session';
 import { useSession } from '../hooks/useSession';
 import { useAuthForm } from '../hooks/useAuthForm';
+import styles from '@/shared/ui/public.module.css';
 
 export default function AuthPage({
   registering = false,
@@ -40,25 +41,58 @@ export default function AuthPage({
     type: string,
     autocomplete: string,
   ) => (
-    <p>
-      <label htmlFor={`auth-${name}`}>{label}</label>{' '}
-      <input
-        id={`auth-${name}`}
-        name={name}
-        type={type}
-        autoComplete={autocomplete}
-        required
-        maxLength={name === 'email' ? 254 : name === 'name' ? 100 : 128}
-        aria-invalid={!!form.fields[name]}
-        aria-describedby={form.fields[name] ? `error-${name}` : undefined}
-      />
+    <div className={styles.field}>
+      <label htmlFor={`auth-${name}`}>{label}</label>
+
+      <div className={styles.inputWrapper}>
+        <input
+          id={`auth-${name}`}
+          name={name}
+          type={type}
+          autoComplete={autocomplete}
+          required
+          maxLength={name === 'email' ? 254 : name === 'name' ? 100 : 128}
+          aria-invalid={!!form.fields[name]}
+          aria-describedby={form.fields[name] ? `error-${name}` : undefined}
+        />
+
+        {(name === 'password' || name === 'confirmation') && (
+          <button
+            className={styles.passwordToggle}
+            type="button"
+            onClick={form.toggleVisibility}
+            aria-label={`${form.show ? 'Ocultar' : 'Mostrar'} ${
+              name === 'confirmation' ? 'confirmação de senha' : 'senha'
+            }`}
+            title={form.show ? 'Ocultar senha' : 'Mostrar senha'}
+            aria-controls={`auth-${name}`}
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+              <circle cx="12" cy="12" r="3" />
+              {form.show && <path d="m3 3 18 18" />}
+            </svg>
+          </button>
+        )}
+      </div>
+
       {form.fields[name] && (
         <span id={`error-${name}`} role="alert">
-          {' '}
           {form.fields[name]}
         </span>
       )}
-    </p>
+    </div>
   );
   return (
     <Page title={registering ? 'Criar conta' : 'Entrar'}>
@@ -81,7 +115,7 @@ export default function AuthPage({
             form.show ? 'text' : 'password',
             registering ? 'new-password' : 'current-password',
           )}
-          <p>De 12 a 128 caracteres. Frases são permitidas.</p>
+          {registering && <p>De 12 a 128 caracteres. Frases são permitidas.</p>}
           {registering &&
             field(
               'confirmation',
@@ -89,9 +123,7 @@ export default function AuthPage({
               form.show ? 'text' : 'password',
               'new-password',
             )}
-          <button type="button" onClick={form.toggleVisibility}>
-            {form.show ? 'Ocultar senha' : 'Mostrar senha'}
-          </button>{' '}
+
           <button type="submit">
             {form.busy ? 'Enviando…' : registering ? 'Criar conta' : 'Entrar'}
           </button>

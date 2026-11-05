@@ -25,13 +25,32 @@ export function Layout() {
 function PublicLayout() {
   const auth = useSession();
   const logout = useLogout();
+  const location = useLocation();
+
+  const pageTitles: Record<string, string> = {
+    '/': 'Início',
+    '/projeto': 'O Projeto',
+    '/planejamento': 'Planejamento',
+    '/desenvolvimento': 'Desenvolvimento',
+    '/resultados': 'Resultados',
+    '/equipe': 'Equipe',
+    '/referencias': 'Referências',
+    '/login': 'Entrar',
+    '/registrar': 'Criar conta',
+  };
+
+  const currentPage = pageTitles[location.pathname] ?? 'Página não encontrada';
+
   return (
     <div className={styles.shell}>
       <>
         <a href="#conteudo">Pular para o conteúdo</a>
         <header className={styles.sidebar}>
           <p className={styles.brand}>
-            <Link to="/">OrangeVision</Link>
+            <Link to="/">
+              <span aria-hidden="true">🍊</span>
+              OrangeVision
+            </Link>
           </p>
           {auth.session && (
             <p>
@@ -94,7 +113,9 @@ function PublicLayout() {
           </nav>
         </header>
         <div className={styles.topbar}>
-          <span>OrangeVision</span>
+          <span>
+            OrangeVision / <strong>{currentPage}</strong>
+          </span>
           <Link to="/login">Entrar</Link>
         </div>
         <main id="conteudo" tabIndex={-1}>

@@ -6,8 +6,9 @@
 
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
-  grid-template-rows: 1fr auto;
+  grid-template-rows: auto 1fr auto;
   grid-template-areas:
+    'sidebar topbar'
     'sidebar content'
     'sidebar footer';
 }
@@ -86,6 +87,9 @@
 }
 
 .brand a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   text-decoration: none;
 }
 
@@ -126,12 +130,176 @@
   margin: 0;
   line-height: 1.6;
 }
+
+.topbar {
+  grid-area: topbar;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e3e7eb;
+}
+
+.topbar > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  background-color: #ff7911;
+  color: #17232d;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.topbar > a:hover {
+  background-color: #ff943d;
+}
+
+:global(body):has(.shell) {
+  margin: 0;
+}
+
+.topbar > span {
+  color: #52636e;
+  font-size: 13px;
+}
+
+.topbar > span strong {
+  margin-left: 8px;
+  color: #17232d;
+  font-weight: 700;
+}
+
+.shell > main form {
+  max-width: 460px;
+  margin: 24px auto;
+  padding: 32px;
+  background-color: #ffffff;
+  border: 1px solid #e3e7eb;
+  border-radius: 12px;
+}
+
+.shell > main form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.shell > main form legend {
+  margin-bottom: 20px;
+  padding: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.shell > main form label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.shell > main form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #899ba7;
+  border-radius: 8px;
+  background-color: #ffffff;
+  color: #17232d;
+  font: inherit;
+}
+
+.shell > main form input:focus-visible {
+  outline: 2px solid #b34b00;
+  outline-offset: 2px;
+}
+
+.shell > main form button {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid #899ba7;
+  border-radius: 8px;
+  background-color: #ffffff;
+  color: #17232d;
+  font: inherit;
+  cursor: pointer;
+}
+
+.shell > main form button[type='submit'] {
+  width: 100%;
+  margin-top: 12px;
+
+  background-color: #ff7911;
+  border-color: #ff7911;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+.shell > main form button:hover:not(:disabled) {
+  background-color: #fff0e3;
+}
+
+.shell > main form button[type='submit']:hover:not(:disabled) {
+  background-color: #ff943d;
+}
+
+.shell > main form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.field {
+  margin-bottom: 20px;
+}
+
+.inputWrapper {
+  position: relative;
+}
+
+.shell > main form .inputWrapper input {
+  box-sizing: border-box;
+  padding-right: 56px;
+}
+
+.shell > main form .inputWrapper .passwordToggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+}
+
+.shell > main form .passwordToggle:focus-visible {
+  outline: 2px solid #b34b00;
+  outline-offset: 0;
+}
+
+.shell > main form .inputWrapper .passwordToggle:hover,
+.shell > main form .inputWrapper .passwordToggle:active {
+  background-color: transparent;
+}
+
 @media (max-width: 760px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto 1fr auto;
+    ggrid-template-rows: auto auto 1fr auto;
     grid-template-areas:
       'sidebar'
+      'topbar'
       'content'
       'footer';
   }
