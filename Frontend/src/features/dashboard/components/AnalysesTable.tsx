@@ -3,6 +3,7 @@ import type { Analysis } from '../api/analyses';
 import { classifications } from '../model/classification';
 import { formatDate, formatNumber } from '@/shared/lib/format';
 import { TableRegion } from '@/shared/ui/TableRegion';
+import styles from '@/shared/ui/dashboard.module.css';
 
 export function AnalysesTable({
   items,
@@ -19,10 +20,17 @@ export function AnalysesTable({
   changePage: (value: number) => void;
   compact?: boolean;
 }) {
+  const visibleItems = compact ? items.slice(0, 5) : items;
+  const firstRecord = visibleItems.length ? offset + 1 : 0;
+  const lastRecord = offset + visibleItems.length;
   return (
     <section>
       <h2>{compact ? 'Últimas análises' : 'Histórico de análises'}</h2>
-      <p>{total} registros no recorte.</p>
+      <p>
+        {visibleItems.length > 0
+          ? `Exibindo ${firstRecord}–${lastRecord} de ${total} análises.`
+          : `${total} análises encontradas para os filtros selecionados.`}
+      </p>
       {items.length === 0 ? (
         <p role="status">
           Nenhuma análise neste período ou página. Ajuste os filtros para
@@ -48,15 +56,27 @@ export function AnalysesTable({
               </tr>
             </thead>
             <tbody>
-              {(compact ? items.slice(0, 5) : items).map((item) => (
+              {visibleItems.map((item) => (
                 <tr key={item.id}>
                   <td>{formatDate(item.timestamp)}</td>
-                  <td>{classifications[item.classification].label}</td>
+
+                  <td>
+                    <span
+                      className={styles.classificationBadge}
+                      data-classification={item.classification}
+                    >
+                      {classifications[item.classification].label}
+                    </span>
+                  </td>
+
                   <td>{formatNumber(item.metrics.visual_score)}</td>
                   <td>{item.device_id || 'Não informado'}</td>
                   <td>
-                    <Link to={`/dashboard/analises/${item.id}`}>
-                      Ver detalhes da análise {item.id.slice(0, 8)}
+                    <Link
+                      to={`/dashboard/analises/${item.id}`}
+                      aria-label={`Ver detalhes da análise ${item.id}`}
+                    >
+                      Ver detalhes
                     </Link>
                   </td>
                 </tr>

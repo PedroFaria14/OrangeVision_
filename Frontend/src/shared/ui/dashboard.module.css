@@ -614,3 +614,64 @@
 .reviewBar {
   --bar-color: #b91c1c;
 }
+
+.classificationBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.classificationBadge[data-classification='APROVADA'] {
+  color: #166534;
+  background-color: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.classificationBadge[data-classification='ATENCAO'] {
+  color: #92400e;
+  background-color: #fffbeb;
+  border-color: #fde68a;
+}
+
+.classificationBadge[data-classification='REVISAR'] {
+  color: #991b1b;
+  background-color: #fef2f2;
+  border-color: #fecaca;
+}
+
+.shell .analysisDetails {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 32px;
+  margin: 24px 0;
+}
+
+.shell .analysisDetails > div {
+  min-width: 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.shell .analysisDetails dt {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.shell .analysisDetails dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .shell .analysisDetails {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
