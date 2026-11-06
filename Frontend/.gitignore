@@ -5,3 +5,6 @@ dist/
 *.log
 test-results/
 playwright-report/
+
+# Dados locais de demonstração
+/src/features/dashboard/api/demo.ts

@@ -34,10 +34,13 @@ export default function DashboardPage({
       void series.refetch();
     }
   };
+
+  const summaryData = summary.data;
+
   return (
     <Page
       title={historyOnly ? 'Histórico de análises' : 'Dashboard'}
-      description="Dados autorizados da sua conta."
+      description={'Dados autorizados da sua conta.'}
     >
       <button
         onClick={refresh}
@@ -76,7 +79,7 @@ export default function DashboardPage({
               <QueryFeedback
                 pending={summary.isPending}
                 error={summary.error}
-                retry={() => void comparison.refetch()}
+                retry={() => void summary.refetch()}
               />
               {summary.data && (
                 <section>
@@ -89,14 +92,38 @@ export default function DashboardPage({
                     <div className={`${styles.metric} ${styles.approved}`}>
                       <dt>Aprovadas</dt>
                       <dd>{summary.data.approved}</dd>
+                      <dd className={styles.metricShare}>
+                        {formatRatio(
+                          summary.data.total > 0
+                            ? summary.data.approved / summary.data.total
+                            : null,
+                        )}{' '}
+                        do total
+                      </dd>
                     </div>
                     <div className={`${styles.metric} ${styles.attention}`}>
                       <dt>Atenção</dt>
                       <dd>{summary.data.attention}</dd>
+                      <dd className={styles.metricShare}>
+                        {formatRatio(
+                          summary.data.total > 0
+                            ? summary.data.attention / summary.data.total
+                            : null,
+                        )}{' '}
+                        do total
+                      </dd>
                     </div>
                     <div className={`${styles.metric} ${styles.review}`}>
                       <dt>Revisar</dt>
                       <dd>{summary.data.review}</dd>
+                      <dd className={styles.metricShare}>
+                        {formatRatio(
+                          summary.data.total > 0
+                            ? summary.data.review / summary.data.total
+                            : null,
+                        )}{' '}
+                        do total
+                      </dd>
                     </div>
                   </dl>
                   <dl className={styles.metadata}>
@@ -111,6 +138,54 @@ export default function DashboardPage({
                   </dl>
                 </section>
               )}
+
+              {summaryData && summaryData.total > 0 && (
+                <section>
+                  <h2>Distribuição das classificações</h2>
+                  <p>
+                    Participação de cada categoria no período e nos filtros
+                    selecionados.
+                  </p>
+
+                  <div className={styles.distribution}>
+                    {[
+                      {
+                        label: 'Aprovadas',
+                        count: summaryData.approved,
+                        color: styles.approvedBar,
+                      },
+                      {
+                        label: 'Atenção',
+                        count: summaryData.attention,
+                        color: styles.attentionBar,
+                      },
+                      {
+                        label: 'Revisar',
+                        count: summaryData.review,
+                        color: styles.reviewBar,
+                      },
+                    ].map(({ label, count, color }) => (
+                      <div className={styles.distributionRow} key={label}>
+                        <div className={styles.distributionLabel}>
+                          <span>{label}</span>
+                          <strong>
+                            {count} · {formatRatio(count / summaryData.total)}
+                          </strong>
+                        </div>
+
+                        <meter
+                          className={`${styles.distributionMeter} ${color}`}
+                          min={0}
+                          max={summaryData.total}
+                          value={count}
+                          aria-label={label}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {comparison.data && <ComparisonTable data={comparison.data} />}
               <QueryFeedback
                 pending={series.isPending}

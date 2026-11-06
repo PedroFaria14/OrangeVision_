@@ -38,7 +38,7 @@ export default function DashboardShell() {
       <aside className={styles.sidebar} data-open={menuOpen}>
         <Link className={styles.brand} to="/">
           <span className={styles.brandMark} aria-hidden="true">
-            O
+            🍊
           </span>
           <span>
             Orange<span className={styles.brandAccent}>Vision</span>
