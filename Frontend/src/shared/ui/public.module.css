@@ -296,7 +296,7 @@
 @media (max-width: 760px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);
-    ggrid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     grid-template-areas:
       'sidebar'
       'topbar'
@@ -304,37 +304,65 @@
       'footer';
   }
 
-  .sidebar {
-    padding: 16px;
-  }
-
-  .shell > main {
-    padding: 24px 16px;
-  }
-
-  .shell > footer {
-    padding: 20px 16px;
-  }
-}
-@media (max-width: 760px) {
-  .shell {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto 1fr auto;
-    grid-template-areas:
-      'sidebar'
-      'content'
-      'footer';
+  .shell,
+  .shell *,
+  .shell *::before,
+  .shell *::after {
+    box-sizing: border-box;
   }
 
   .sidebar {
+    min-width: 0;
     padding: 16px;
   }
 
+  .brand {
+    margin-bottom: 16px;
+  }
+
+  .sidebar nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .sidebar nav li {
+    min-width: 0;
+    margin: 0;
+  }
+
+  .sidebar nav a {
+    padding: 10px 12px;
+  }
+
+  .topbar {
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .topbar > span {
+    overflow-wrap: anywhere;
+  }
+
   .shell > main {
+    min-width: 0;
     padding: 24px 16px;
   }
 
+  .shell > main form {
+    width: 100%;
+    padding: 24px 16px;
+  }
+
+  .shell > main > section > section {
+    padding: 20px;
+  }
+
   .shell > footer {
+    min-width: 0;
     padding: 20px 16px;
+    overflow-wrap: anywhere;
   }
 }
