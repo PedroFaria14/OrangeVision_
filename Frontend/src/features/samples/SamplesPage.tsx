@@ -13,6 +13,7 @@ import {
   uploadSample,
   type Sample,
 } from './api';
+import styles from '@/shared/ui/dashboard.module.css';
 
 type Executor = Awaited<ReturnType<typeof sampleDevices>>[number];
 
@@ -66,11 +67,12 @@ function SampleItem({
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [maskFailed, setMaskFailed] = useState(false);
+  const queueHelpId = `sample-queue-help-${item.id}`;
   const reserved =
     item.state === 'processing' &&
     (!item.claim_expires_at || Date.parse(item.claim_expires_at) > observedAt);
   return (
-    <article>
+    <article className={styles.sampleCard}>
       <h2>{item.filename}</h2>
       <p>
         <strong>Estado:</strong> <span>{sampleStates[item.state]}</span>
@@ -135,16 +137,25 @@ function SampleItem({
       {item.reason && <p>{item.reason}</p>}
       <p>
         <strong>Categoria:</strong>{' '}
-        {item.classification
-          ? {
-              APROVADA: 'Aprovada (experimental)',
-              ATENCAO: 'Atenção (experimental)',
-              REVISAR: 'Revisar (experimental)',
-            }[item.classification]
-          : 'Ainda não validada'}
+        {item.classification ? (
+          <span
+            className={styles.classificationBadge}
+            data-classification={item.classification}
+          >
+            {
+              {
+                APROVADA: 'Aprovada (experimental)',
+                ATENCAO: 'Atenção (experimental)',
+                REVISAR: 'Revisar (experimental)',
+              }[item.classification]
+            }
+          </span>
+        ) : (
+          'Ainda não validada'
+        )}
       </p>
       {item.metrics && (
-        <dl>
+        <dl className={styles.analysisDetails}>
           {[
             ['Cor laranja', formatRatio(item.metrics.orange_color_ratio)],
             [
@@ -192,11 +203,19 @@ function SampleItem({
       <button
         disabled={busy || !device || reserved || item.state === 'queued'}
         onClick={enqueue}
+        aria-describedby={!device ? queueHelpId : undefined}
       >
         {item.state === 'received'
           ? 'Enviar para análise local'
           : 'Analisar novamente'}
       </button>
+      {!device && (
+        <p id={queueHelpId}>
+          Selecione um equipamento autorizado na seção “Equipamento de
+          processamento”. Se nenhum estiver disponível, solicite a liberação ao
+          responsável pelo sistema.
+        </p>
+      )}
     </article>
   );
 }
@@ -273,6 +292,11 @@ function Workspace({ userId, csrf }: { userId: string; csrf: string }) {
       setBusy(false);
     }
   }
+
+  const refreshing =
+    config.isFetching ||
+    (enabled && (devices.isFetching || listing.isFetching));
+
   function refresh() {
     void config.refetch();
     if (enabled) {
@@ -289,7 +313,14 @@ function Workspace({ userId, csrf }: { userId: string; csrf: string }) {
         Estas amostras não entram nas estatísticas do dashboard. Estado de
         processamento não é categoria de qualidade.
       </p>
-      <button onClick={refresh}>Atualizar amostras</button>
+      <button
+        type="button"
+        onClick={refresh}
+        disabled={refreshing || busy}
+        aria-busy={refreshing}
+      >
+        {refreshing ? 'Atualizando…' : 'Atualizar amostras'}
+      </button>
       <QueryFeedback
         pending={config.isPending}
         error={config.error}
@@ -326,6 +357,15 @@ function Workspace({ userId, csrf }: { userId: string; csrf: string }) {
                 }}
               />
             </p>
+
+            {file && (
+              <p>
+                <strong>Arquivo selecionado:</strong> {file.name}
+                {' · '}
+                {formatNumber(file.size / (1024 * 1024), 2)} MiB
+              </p>
+            )}
+
             <button disabled={!file || busy} onClick={() => void upload()}>
               {busy ? 'Aguarde…' : 'Enviar imagem'}
             </button>
@@ -382,19 +422,21 @@ function Workspace({ userId, csrf }: { userId: string; csrf: string }) {
               Você ainda não enviou amostras. Escolha uma imagem para começar.
             </p>
           )}
-          {listing.data?.items.map((item) => (
-            <SampleItem
-              key={item.id}
-              item={item}
-              device={device}
-              executor={devices.data?.find(
-                (option) => option.id === item.device_id,
-              )}
-              busy={busy || devices.isError || devices.isPending}
-              observedAt={listing.dataUpdatedAt}
-              enqueue={() => void enqueue(item)}
-            />
-          ))}
+          <div className={styles.samplesGrid}>
+            {listing.data?.items.map((item) => (
+              <SampleItem
+                key={item.id}
+                item={item}
+                device={device}
+                executor={devices.data?.find(
+                  (option) => option.id === item.device_id,
+                )}
+                busy={busy || devices.isError || devices.isPending}
+                observedAt={listing.dataUpdatedAt}
+                enqueue={() => void enqueue(item)}
+              />
+            ))}
+          </div>
           {listing.data && listing.data.total > 0 && (
             <nav aria-label="Paginação de amostras">
               <button

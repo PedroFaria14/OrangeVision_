@@ -705,3 +705,32 @@
   background-color: #f1f5f9;
   border-color: #cbd5e1;
 }
+
+.shell .samplesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 24px;
+  margin: 24px 0;
+}
+
+.shell .sampleCard {
+  min-width: 0;
+  padding: 24px;
+  background-color: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.shell .sampleCard > h2 {
+  margin-top: 0;
+  font-size: 20px;
+}
+
+.shell .sampleCard img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 16px 0;
+  border-radius: 8px;
+}
