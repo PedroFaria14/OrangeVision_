@@ -1,6 +1,7 @@
 import { Page } from '@/shared/ui/Page';
 import { formatDate } from '@/shared/lib/format';
 import { useInspection } from '../hooks/useInspection';
+import styles from '@/shared/ui/dashboard.module.css';
 
 const states = {
   pending: 'Aguardando pareamento',
@@ -19,6 +20,11 @@ export default function InspectionPage() {
       void value.current.refetch();
     }
   };
+
+  const refreshing =
+    value.config.isFetching ||
+    (value.enabled && (value.devices.isFetching || value.current.isFetching));
+
   const blocked =
     value.busy ||
     value.current.isPending ||
@@ -31,7 +37,14 @@ export default function InspectionPage() {
       title="Inspeções"
       description="Identifique o operador e pareie o equipamento autorizado."
     >
-      <button onClick={refresh}>Atualizar sessões</button>
+      <button
+        type="button"
+        onClick={refresh}
+        disabled={refreshing || value.busy}
+        aria-busy={refreshing}
+      >
+        {refreshing ? 'Atualizando…' : 'Atualizar sessões'}
+      </button>
       {value.config.isPending && (
         <p role="status">Consultando disponibilidade…</p>
       )}
@@ -41,17 +54,49 @@ export default function InspectionPage() {
         </p>
       )}
       {value.config.data && !value.enabled && (
-        <p>
-          Inspeções estão desativadas neste ambiente. Dashboard, histórico e
-          conta continuam disponíveis.
-        </p>
+        <section>
+          <h2>Como iniciar</h2>
+          <ol>
+            <li>Selecione um equipamento autorizado para sua conta.</li>
+            <li>Clique em Iniciar inspeção para gerar o código temporário.</li>
+            <li>
+              No programa Python do equipamento, utilize o código para parear
+              esta sessão.
+            </li>
+            <li>
+              Após o pareamento, execute a captura pelo programa local. Consulte
+              os resultados no dashboard e no histórico.
+            </li>
+          </ol>
+          <p>
+            Os resultados desta sessão ficam associados à conta que iniciou a
+            inspeção. O pareamento autoriza a sessão; ele não liga a câmera.
+          </p>
+        </section>
       )}
       {value.enabled && (
         <>
-          <p>
-            A sessão pertence ao operador que iniciou a inspeção. Parear não
-            abre a câmera remotamente.
-          </p>
+          <section>
+            <h2>Como iniciar</h2>
+            <ol>
+              <li>Selecione um equipamento autorizado para sua conta.</li>
+              <li>
+                Clique em “Iniciar inspeção” para gerar o código temporário de
+                pareamento.
+              </li>
+              <li>
+                Informe esse código no programa Python executado no equipamento.
+              </li>
+              <li>
+                Inicie a captura no equipamento e acompanhe os resultados no
+                dashboard e no histórico.
+              </li>
+            </ol>
+            <p>
+              As análises desta sessão ficam vinculadas à conta que iniciou a
+              inspeção. O pareamento não liga a câmera remotamente.
+            </p>
+          </section>
           {value.error && <p role="alert">{value.error}</p>}
           {(value.devices.isError || value.current.isError) && (
             <p role="alert">
@@ -118,17 +163,34 @@ export default function InspectionPage() {
             )}
           </section>
           {value.current.isPending && <p role="status">Consultando sessões…</p>}
+
+          {!value.current.isPending &&
+            !value.current.isError &&
+            value.sessions.length === 0 && (
+              <p role="status">Nenhuma sessão em andamento para sua conta.</p>
+            )}
+
           {value.sessions.map((item) => (
             <section key={item.id}>
               <h2>Operador: {item.operator_name}</h2>
-              <p>Estado: {states[item.state]}</p>
+              <p>
+                Estado:{' '}
+                <span
+                  className={styles.inspectionState}
+                  data-state={item.state}
+                >
+                  {states[item.state]}
+                </span>
+              </p>
               <p>Sessão: {item.id}</p>
+
               <p>
                 Equipamento:{' '}
                 {value.devices.data?.find(
                   (option) => option.id === item.device_id,
                 )?.name || item.device_id}
               </p>
+
               {item.state === 'pending' &&
                 (value.issued?.id === item.id ? (
                   <>
@@ -155,6 +217,7 @@ export default function InspectionPage() {
                     cancele esta inspeção ou aguarde a expiração.
                   </p>
                 ))}
+
               {item.state === 'active' && (
                 <>
                   <p>
@@ -168,12 +231,14 @@ export default function InspectionPage() {
                   </p>
                 </>
               )}
+
               {item.state === 'closing' && (
                 <p>
                   Aguarde confirmação do executor local. Registros anteriores
                   mantêm o operador original.
                 </p>
               )}
+
               <button
                 disabled={
                   value.busy ||

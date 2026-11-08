@@ -675,3 +675,33 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.shell .inspectionState {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.shell .inspectionState[data-state='pending'],
+.shell .inspectionState[data-state='closing'] {
+  color: #854d0e;
+  background-color: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.shell .inspectionState[data-state='active'] {
+  color: #166534;
+  background-color: #f0fdf4;
+  border-color: #86efac;
+}
+
+.shell .inspectionState[data-state='closed'],
+.shell .inspectionState[data-state='expired'] {
+  color: #475569;
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+}
