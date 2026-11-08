@@ -50,7 +50,7 @@ export const contents = {
       ],
       [
         'Stack',
-        'React, TypeScript, TanStack Query e HTML básico no frontend; FastAPI na API online; Python e OpenCV previstos no Raspberry.',
+        'React e TypeScript na interface web, TanStack Query nas consultas à API, FastAPI no backend online, PostgreSQL no armazenamento remoto e Python com OpenCV no processamento local.',
       ],
     ],
     pending:
