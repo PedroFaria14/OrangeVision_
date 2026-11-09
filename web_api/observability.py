@@ -2,6 +2,15 @@ import json
 import logging
 from datetime import UTC, datetime
 
+# Campos permitidos nos logs (allowlist): identificadores, estados e números.
+# Nunca: chaves, cookies, imagens, texto livre do provedor ou dados pessoais.
+AUDIT_FIELDS = (
+    'request_id', 'status', 'duration_ms', 'error_type', 'worker_status',
+    'job_id', 'sample_id', 'device_id', 'attempt', 'model', 'outcome', 'classification',
+    'http_status', 'provider_status', 'reason', 'state', 'algorithm_version',
+    'calibration_version', 'published', 'publish_status',
+)
+
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
@@ -10,8 +19,8 @@ class JsonFormatter(logging.Formatter):
             'level': record.levelname,
             'message': record.getMessage(),
         }
-        for name in ('request_id', 'status', 'duration_ms', 'error_type'):
-            if hasattr(record, name):
+        for name in AUDIT_FIELDS:
+            if getattr(record, name, None) is not None:
                 data[name] = getattr(record, name)
         return json.dumps(data)
 

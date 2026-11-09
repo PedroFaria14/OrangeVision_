@@ -12,6 +12,7 @@
 Este arquivo é um **briefing técnico e funcional para desenvolver a versão React do Google Sites e o sistema real**. Pode ser entregue a um desenvolvedor ou a uma IA de programação como fonte de requisitos.
 
 **Distinguir obrigatoriamente:**
+
 - **Conteúdo já definido:** estrutura e narrativa do Google Sites, fluxo lógico, categorias e diretrizes do protótipo.
 - **A implementar:** código React, FastAPI, controle de hardware, captura, análise, banco, dashboard, testes e documentação final.
 - **A validar na bancada:** modelo exato de Raspberry Pi, câmera, sensores, atuadores, montagem mecânica, condições de iluminação e limiares da classificação.
@@ -86,15 +87,15 @@ A inspeção manual pode ser repetitiva e subjetiva, e o registro de ocorrência
 
 ### Responsabilidades e onde executa
 
-| Camada | Local | Responsabilidades |
-|---|---|---|
-| React | Vercel ou outra hospedagem estática | Site, dashboard responsivo, gráficos, filtros, estados de carregamento/offline |
-| API web (`/api/*`) | Funções serverless da hospedagem | Consultar Neon com segredo do servidor, validar filtros, limitar requisições e controlar acesso |
-| Neon PostgreSQL | Nuvem | Armazenar eventos sincronizados, consultas agregadas, histórico por dispositivo/lote |
-| FastAPI | Raspberry Pi, rede local | Saúde, diagnóstico, consultas locais e comando manual protegido |
-| Worker Python | Raspberry Pi | Presença, câmera, segmentação, 4 métricas, classe e GPIO; um ciclo por fruta |
-| SQLite + outbox | Raspberry Pi | Registro durável local, fila de sincronização, reenvio após queda de internet |
-| Armazenamento de imagem | Pi (inicial); bucket privado (futuro) | Original/anotada por UUID, retenção e acesso seguro |
+| Camada                  | Local                                 | Responsabilidades                                                                               |
+| ----------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| React                   | Vercel ou outra hospedagem estática   | Site, dashboard responsivo, gráficos, filtros, estados de carregamento/offline                  |
+| API web (`/api/*`)      | Funções serverless da hospedagem      | Consultar Neon com segredo do servidor, validar filtros, limitar requisições e controlar acesso |
+| Neon PostgreSQL         | Nuvem                                 | Armazenar eventos sincronizados, consultas agregadas, histórico por dispositivo/lote            |
+| FastAPI                 | Raspberry Pi, rede local              | Saúde, diagnóstico, consultas locais e comando manual protegido                                 |
+| Worker Python           | Raspberry Pi                          | Presença, câmera, segmentação, 4 métricas, classe e GPIO; um ciclo por fruta                    |
+| SQLite + outbox         | Raspberry Pi                          | Registro durável local, fila de sincronização, reenvio após queda de internet                   |
+| Armazenamento de imagem | Pi (inicial); bucket privado (futuro) | Original/anotada por UUID, retenção e acesso seguro                                             |
 
 ### Implantação e operação
 
@@ -110,18 +111,19 @@ A inspeção manual pode ser repetitiva e subjetiva, e o registro de ocorrência
 
 Deve apresentar o projeto de forma acadêmica e coerente com o que for realmente desenvolvido. Rotas propostas:
 
-| Rota | Página | Conteúdo obrigatório |
-|---|---|---|
-| `/` | Início | apresentação, resumo, três pilares, fluxo do sistema, problema × solução, setor/ODS 2, stack tecnológica, links |
-| `/projeto` | O Projeto | contexto, problema, solução, objeto de estudo (laranja Pêra-Rio, se mantida), objetivos, escopo e limitações |
-| `/planejamento` | Planejamento | 5W2H, etapas, cronograma, recursos, custos **estimados** e entregáveis |
-| `/desenvolvimento` | Desenvolvimento | arquitetura, hardware, GPIO, visão computacional, lógica de classificação, referências técnicas, software, banco, integração, testes e protótipo |
-| `/dashboard` | Dashboard | indicadores e histórico **sincronizados no Neon via API hospedada**, identificando última atualização/atraso; estados de carregamento, sem dados e offline |
-| `/resultados` | Resultados | plano de testes, evidências, avaliações, métricas realmente medidas e limitações |
-| `/equipe` | Equipe | seis integrantes e áreas de atuação; revisar descrições antes da publicação |
-| `/referencias` | Referências | fontes técnicas, citricultura, ODS 2 e fontes bibliográficas completas |
+| Rota               | Página          | Conteúdo obrigatório                                                                                                                                       |
+| ------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                | Início          | apresentação, resumo, três pilares, fluxo do sistema, problema × solução, setor/ODS 2, stack tecnológica, links                                            |
+| `/projeto`         | O Projeto       | contexto, problema, solução, objeto de estudo (laranja Pêra-Rio, se mantida), objetivos, escopo e limitações                                               |
+| `/planejamento`    | Planejamento    | 5W2H, etapas, cronograma, recursos, custos **estimados** e entregáveis                                                                                     |
+| `/desenvolvimento` | Desenvolvimento | arquitetura, hardware, GPIO, visão computacional, lógica de classificação, referências técnicas, software, banco, integração, testes e protótipo           |
+| `/dashboard`       | Dashboard       | indicadores e histórico **sincronizados no Neon via API hospedada**, identificando última atualização/atraso; estados de carregamento, sem dados e offline |
+| `/resultados`      | Resultados      | plano de testes, evidências, avaliações, métricas realmente medidas e limitações                                                                           |
+| `/equipe`          | Equipe          | seis integrantes e áreas de atuação; revisar descrições antes da publicação                                                                                |
+| `/referencias`     | Referências     | fontes técnicas, citricultura, ODS 2 e fontes bibliográficas completas                                                                                     |
 
 **Design system** já usado no Google Sites:
+
 - Laranja `#F97316` — acentos, detalhes, links/botões.
 - Verde `#15803D` — agronegócio, destaque e seções.
 - Grafite `#111827` — texto, cabeçalho e rodapé.
@@ -216,7 +218,7 @@ Estados da interface: `carregando`, `sem dados`, `API offline`, `hardware indisp
 ### Equipe
 
 - [ ] Felipe Kenzo — Software • Documentação.
-- [ ] Kauan Fernandes — Redes • Infraestrutura • Integração.
+- [ ] Kauan Fernandes — Frontend • Infraestrutura • Integração.
 - [ ] Marcelo Capeletto — Qualidade • Testes • Documentação.
 - [ ] Pedro Faria — Software • Backend • Integração.
 - [ ] Glauber Sandi Martins — Desenvolvimento de Produto • Industrialização • Gestão de Projetos • Integração.
@@ -296,19 +298,19 @@ orangevision/
 
 **API web na hospedagem React:** `/api/analyses`, `/api/metrics/*`, `/api/sync/status` e `/api/analyses/:id`; consultas ao Neon ocorrem no servidor. Evitar conflito de roteamento ao implantar. A tabela abaixo indica o proprietário.
 
-| Método | Rota | Onde roda / o que faz |
-|---|---|---|
-| GET | `/health` | Pi local: API online, versão, timestamp |
-| GET | `/system/status` | Pi local: câmera, sensor, saídas, worker, última falha |
-| GET | `/analyses?limit=20&offset=0&classification=...` | API web → Neon: histórico paginado validado |
-| GET | `/analyses/{id}` | API web → Neon: análise detalhada por UUID |
-| GET | `/analyses/{id}/image?kind=original` | Somente com bucket privado configurado, URL autorizada; caso contrário, indisponível no dashboard remoto |
-| GET | `/metrics/summary?from=...&to=...` | API web → Neon: totais e taxa de aprovação |
-| GET | `/metrics/distribution?from=...&to=...` | API web → Neon: distribuição de classes |
-| POST | `/capture` | Pi local autenticado: agenda captura; 409 se ocupado |
-| GET | `/jobs/{id}` | Pi local: andamento da operação |
-| GET | `/export.csv` | API web → Neon: CSV filtrado opcional |
-| GET | `/sync/status` | API web → Neon: último recebimento por device_id, marca atraso |
+| Método | Rota                                             | Onde roda / o que faz                                                                                    |
+| ------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| GET    | `/health`                                        | Pi local: API online, versão, timestamp                                                                  |
+| GET    | `/system/status`                                 | Pi local: câmera, sensor, saídas, worker, última falha                                                   |
+| GET    | `/analyses?limit=20&offset=0&classification=...` | API web → Neon: histórico paginado validado                                                              |
+| GET    | `/analyses/{id}`                                 | API web → Neon: análise detalhada por UUID                                                               |
+| GET    | `/analyses/{id}/image?kind=original`             | Somente com bucket privado configurado, URL autorizada; caso contrário, indisponível no dashboard remoto |
+| GET    | `/metrics/summary?from=...&to=...`               | API web → Neon: totais e taxa de aprovação                                                               |
+| GET    | `/metrics/distribution?from=...&to=...`          | API web → Neon: distribuição de classes                                                                  |
+| POST   | `/capture`                                       | Pi local autenticado: agenda captura; 409 se ocupado                                                     |
+| GET    | `/jobs/{id}`                                     | Pi local: andamento da operação                                                                          |
+| GET    | `/export.csv`                                    | API web → Neon: CSV filtrado opcional                                                                    |
+| GET    | `/sync/status`                                   | API web → Neon: último recebimento por device_id, marca atraso                                           |
 
 ### Exemplo de resposta de análise (ilustrativo — NÃO é dado real)
 
@@ -333,6 +335,7 @@ orangevision/
 ```
 
 Observações:
+
 - Razões métricas de `0.0` a `1.0`; score de `0` a `100` — padronizar no backend e converter para `%` na tela.
 - A nomenclatura de banco é **`regioes_anormais`**, evitando alternância com `manchas`.
 - Salvar versão de calibração para rastrear classificações ao longo do projeto.
@@ -343,25 +346,25 @@ Observações:
 
 Tabela principal `analises`:
 
-| Campo | Tipo sugerido | Observação |
-|---|---|---|
-| `id` | TEXT UUID PRIMARY KEY | mesmo identificador local/remoto; gerado uma única vez no Pi |
-| `data_hora` | TEXT local / TIMESTAMPTZ cloud | horário do evento em UTC ou ISO 8601 com timezone |
-| `classificacao` | TEXT | APROVADA / ATENCAO / REVISAR |
-| `cor_proporcao` | REAL | 0–1, medido **dentro da região da fruta** |
-| `regioes_anormais` | REAL | 0–1, calculado **dentro da máscara da fruta** |
-| `circularidade` | REAL | métrica com domínio definido e validado |
-| `assimetria` | REAL | 0–1, alinhamento pelo objeto, não pelo quadro inteiro |
-| `score_visual` | REAL | 0–100, versão experimental calibrada |
-| `imagem_original` | TEXT | caminho relativo controlado |
-| `imagem_anotada` | TEXT NULL | opcional |
-| `versao_calibracao` | TEXT | rastreabilidade |
-| `lote` | TEXT NULL | opcional |
-| `status_execucao` | TEXT | concluída/erro conforme arquitetura |
-| `observacoes` | TEXT NULL | motivo de revisão/falha |
-| `device_id` | TEXT NOT NULL | origem estável da análise |
-| `sincronizado_em` | TEXT / TIMESTAMPTZ NULL | marcar no local após confirmação do Neon |
-| `criado_em_nuvem` | TIMESTAMPTZ cloud | timestamp de ingestão no Neon |
+| Campo               | Tipo sugerido                  | Observação                                                   |
+| ------------------- | ------------------------------ | ------------------------------------------------------------ |
+| `id`                | TEXT UUID PRIMARY KEY          | mesmo identificador local/remoto; gerado uma única vez no Pi |
+| `data_hora`         | TEXT local / TIMESTAMPTZ cloud | horário do evento em UTC ou ISO 8601 com timezone            |
+| `classificacao`     | TEXT                           | APROVADA / ATENCAO / REVISAR                                 |
+| `cor_proporcao`     | REAL                           | 0–1, medido **dentro da região da fruta**                    |
+| `regioes_anormais`  | REAL                           | 0–1, calculado **dentro da máscara da fruta**                |
+| `circularidade`     | REAL                           | métrica com domínio definido e validado                      |
+| `assimetria`        | REAL                           | 0–1, alinhamento pelo objeto, não pelo quadro inteiro        |
+| `score_visual`      | REAL                           | 0–100, versão experimental calibrada                         |
+| `imagem_original`   | TEXT                           | caminho relativo controlado                                  |
+| `imagem_anotada`    | TEXT NULL                      | opcional                                                     |
+| `versao_calibracao` | TEXT                           | rastreabilidade                                              |
+| `lote`              | TEXT NULL                      | opcional                                                     |
+| `status_execucao`   | TEXT                           | concluída/erro conforme arquitetura                          |
+| `observacoes`       | TEXT NULL                      | motivo de revisão/falha                                      |
+| `device_id`         | TEXT NOT NULL                  | origem estável da análise                                    |
+| `sincronizado_em`   | TEXT / TIMESTAMPTZ NULL        | marcar no local após confirmação do Neon                     |
+| `criado_em_nuvem`   | TIMESTAMPTZ cloud              | timestamp de ingestão no Neon                                |
 
 **Outbox SQLite:** tabela `sync_outbox(event_id UUID, entity_type, entity_id UUID, payload_json, status PENDING|SYNCED|FAILED, attempt_count, next_retry_at, last_error, created_at, synced_at)`. A análise e o evento outbox devem ser gravados na **mesma transação local**.
 
@@ -517,44 +520,45 @@ INICIALIZANDO → PRONTO → FRUTA_DETECTADA → CAPTURANDO
 
 ## 12. Plano de QA e evidências exigidas
 
-| ID | Teste | Evidência mínima |
-|---|---|---|
-| QA-001 | sensor IR | foto/vídeo e logs de detecção/remoção |
-| QA-002 | câmera | imagem original e log de captura |
-| QA-003 | 3 LEDs | foto/vídeo de cada resultado |
-| QA-004 | buzzer | vídeo curto da sinalização |
-| QA-005 | servo | vídeo dos estados físicos e alimentação correta |
-| QA-006 | segmentação | exemplo de imagem + máscara |
-| QA-007 | métricas visuais | tabela de valores e imagem associada |
-| QA-008 | classificação | conjunto de casos e justificativa de classes |
-| QA-009 | SQLite | consulta real da linha salva |
-| QA-010 | dashboard React | screenshot com dados reais do Neon, horário da última sincronização e histórico |
-| QA-011 | ciclo completo | vídeo sensor→foto→classificação→atuação→SQLite→Neon→dashboard |
-| QA-012 | perda de internet | análise continua e SQLite recebe registro pendente |
-| QA-013 | reconexão e sincronização | registro é enviado ao Neon; outbox marca sincronizado |
-| QA-014 | reenvio idempotente | nova tentativa não duplica UUID/análise no Neon |
-| QA-015 | API e credenciais | React não contém segredo do Neon; acesso indevido é bloqueado |
+| ID     | Teste                     | Evidência mínima                                                                |
+| ------ | ------------------------- | ------------------------------------------------------------------------------- |
+| QA-001 | sensor IR                 | foto/vídeo e logs de detecção/remoção                                           |
+| QA-002 | câmera                    | imagem original e log de captura                                                |
+| QA-003 | 3 LEDs                    | foto/vídeo de cada resultado                                                    |
+| QA-004 | buzzer                    | vídeo curto da sinalização                                                      |
+| QA-005 | servo                     | vídeo dos estados físicos e alimentação correta                                 |
+| QA-006 | segmentação               | exemplo de imagem + máscara                                                     |
+| QA-007 | métricas visuais          | tabela de valores e imagem associada                                            |
+| QA-008 | classificação             | conjunto de casos e justificativa de classes                                    |
+| QA-009 | SQLite                    | consulta real da linha salva                                                    |
+| QA-010 | dashboard React           | screenshot com dados reais do Neon, horário da última sincronização e histórico |
+| QA-011 | ciclo completo            | vídeo sensor→foto→classificação→atuação→SQLite→Neon→dashboard                   |
+| QA-012 | perda de internet         | análise continua e SQLite recebe registro pendente                              |
+| QA-013 | reconexão e sincronização | registro é enviado ao Neon; outbox marca sincronizado                           |
+| QA-014 | reenvio idempotente       | nova tentativa não duplica UUID/análise no Neon                                 |
+| QA-015 | API e credenciais         | React não contém segredo do Neon; acesso indevido é bloqueado                   |
 
 **Indicadores diferentes:**
+
 - `taxa_aprovacao_frutas = aprovadas / total_validas`;
 - `taxa_sucesso_qa = testes_aprovados / testes_executados`;
 - `acuracia_classificacao` só com **referência rotulada** e metodologia descrita.
 
 ## 13. Rastreabilidade: o site promete, o sistema precisa provar
 
-| Item divulgado no site | Componente técnico correspondente | Como comprovar | Estado inicial |
-|---|---|---|---|
-| Captura de imagens | câmera + driver | imagem real | Planejado |
-| Edge Computing | OpenCV no Pi | log sem dependência de cloud | Planejado |
-| Cor e regiões anormais | `processor.py` | máscara + valores | Planejado |
-| Circularidade/assimetria | `processor.py` | valores e contornos | Planejado |
-| Três classes | `classifier.py` | exemplos e regras versionadas | Planejado |
-| LEDs, buzzer e servo | `outputs.py` + montagem | vídeo + esquema | Planejado |
-| Registro e rastreio | SQLite local + Neon e UUID | consultas locais/remotas conciliadas | Planejado |
-| Dashboard | React + API hospedada + Neon | print, horário de sincronização e métricas reais | Planejado |
-| Offline/sincronização | SQLite outbox + sincronizador | testes QA-012 a QA-014 | Planejado |
-| ODS 2 e agronegócio | fundamentação | referências e contexto | Definido |
-| Resultados de desempenho | testes e avaliação | números medidos | Ainda não medido |
+| Item divulgado no site   | Componente técnico correspondente | Como comprovar                                   | Estado inicial   |
+| ------------------------ | --------------------------------- | ------------------------------------------------ | ---------------- |
+| Captura de imagens       | câmera + driver                   | imagem real                                      | Planejado        |
+| Edge Computing           | OpenCV no Pi                      | log sem dependência de cloud                     | Planejado        |
+| Cor e regiões anormais   | `processor.py`                    | máscara + valores                                | Planejado        |
+| Circularidade/assimetria | `processor.py`                    | valores e contornos                              | Planejado        |
+| Três classes             | `classifier.py`                   | exemplos e regras versionadas                    | Planejado        |
+| LEDs, buzzer e servo     | `outputs.py` + montagem           | vídeo + esquema                                  | Planejado        |
+| Registro e rastreio      | SQLite local + Neon e UUID        | consultas locais/remotas conciliadas             | Planejado        |
+| Dashboard                | React + API hospedada + Neon      | print, horário de sincronização e métricas reais | Planejado        |
+| Offline/sincronização    | SQLite outbox + sincronizador     | testes QA-012 a QA-014                           | Planejado        |
+| ODS 2 e agronegócio      | fundamentação                     | referências e contexto                           | Definido         |
+| Resultados de desempenho | testes e avaliação                | números medidos                                  | Ainda não medido |
 
 > Atualizar a tabela durante o projeto. Não marcar como “implementado” por existir um protótipo de código não testado.
 

@@ -20,6 +20,8 @@ export const analysisSchema = z.object({
   synced_at: z.null(),
   inspection_session_id: z.string().uuid().nullish(),
   classification_reason: z.string().nullish(),
+  evaluation_source: z.enum(['local', 'gemini', 'human']).nullish(),
+  decision_revision: z.number().int().nonnegative().optional(),
 });
 export type Analysis = z.infer<typeof analysisSchema>;
 const count = z.number().int().nonnegative();

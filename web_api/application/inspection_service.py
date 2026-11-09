@@ -6,6 +6,10 @@ from datetime import UTC, timedelta
 from .auth_service import digest
 from .errors import ApplicationError
 
+# Cobre as três tentativas Gemini com lease de 2 minutos e fila curta. Um job adiado
+# por cota diária pode terminar depois disso; o resultado continua disponível no site.
+DEVICE_EVALUATION_ACCESS_WINDOW = timedelta(hours=1)
+
 
 def payload_digest(payload: dict) -> str:
     return hashlib.sha256(
@@ -39,6 +43,14 @@ def capture_within_authorization(timestamp, session, now):
     return session['started_at'] - timedelta(
         seconds=30
     ) <= timestamp < deadline and timestamp <= now + timedelta(seconds=30)
+
+
+def evaluation_access_deadline(session):
+    """Fim da consulta do equipamento, contado do encerramento ou da expiração da sessão."""
+    ended = session['authorization_expires_at']
+    if session['closed_at']:
+        ended = min(ended, session['closed_at'])
+    return ended + DEVICE_EVALUATION_ACCESS_WINDOW
 
 
 def receipt_status(receipt, session_id, payload_hash):

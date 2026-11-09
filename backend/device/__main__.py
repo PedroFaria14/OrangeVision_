@@ -5,8 +5,8 @@ import time
 from contextlib import ExitStack
 from uuid import UUID, uuid4
 
-from .api import ApiFailure, DeviceApi, Offline
-from .config import DeviceSettings
+from .api import ApiFailure, DeviceApi, Offline, connection_guidance
+from .config import ConfigurationError, DeviceSettings
 from .detector import ModelFailure
 from .locking import device_lock
 from .storage import Store
@@ -21,6 +21,8 @@ def main():
     parser.add_argument(
         'command',
         choices=(
+            'configure',
+            'update-credential',
             'pair',
             'cancel-pairing',
             'capture',
@@ -31,6 +33,10 @@ def main():
             'job',
             'samples',
         ),
+    )
+    parser.add_argument(
+        '--if-needed', action='store_true',
+        help='Com configure, reutilizar configuração completa sem solicitar entrada.',
     )
     parser.add_argument(
         '--request-id',
@@ -56,6 +62,8 @@ def main():
         '--calibration', help='Calibração validada para amostras experimentais.'
     )
     args = parser.parse_args()
+    if args.if_needed and args.command != 'configure':
+        parser.error('--if-needed só pode ser usado com configure.')
     if args.resume and args.command != 'pair':
         parser.error('--resume só pode ser usado com pair.')
     if (args.draft or args.calibration) and args.command != 'samples':
@@ -64,24 +72,37 @@ def main():
         parser.error('--ai é uma opção do comando samples.')
     api, camera = None, None
     try:
+        if args.command in ('configure', 'update-credential'):
+            if args.loop or args.request_id:
+                parser.error('configure e update-credential não executam trabalhos.')
+            from .provisioning import UNCONFIRMED, configure, ensure_configuration, guard_identity
+
+            if args.if_needed:
+                values = ensure_configuration()
+                guard_identity(values)
+                print('Configuração local disponível. ' + UNCONFIRMED)
+            else:
+                configure(rotate=args.command == 'update-credential')
+            return
         settings = DeviceSettings.load()
+        store = Store(settings.database)
+        store.initialize()
+        store.bind_device(settings.device_id, settings.api_url)
         api = DeviceApi(settings)
         if args.command == 'samples':
             from .samples import run_samples
 
-            camera_store = Store(settings.database)
-            camera_store.initialize()
             run_samples(
                 api,
                 draft=args.draft,
-                calibration=args.calibration,
+                # Igual à janela da câmera: sem --calibration, usa CALIBRATION_PATH.
+                calibration=args.calibration
+                or (None if args.draft else settings.calibration_path),
                 loop=args.loop,
                 ai=args.ai,
-                camera_store=camera_store,
+                camera_store=store,
             )
             return
-        store = Store(settings.database)
-        store.initialize()
         if args.command == 'job':
             if not args.request_id:
                 raise RuntimeError('Informe --request-id para consultar um comando existente.')
@@ -179,12 +200,13 @@ def main():
                             )
     except KeyboardInterrupt:
         print('Executor interrompido; pendências locais preservadas.')
-    except (ClockFailure, PairingFailure, ModelFailure) as exc:
+    except (ConfigurationError, ClockFailure, PairingFailure, ModelFailure) as exc:
         print(str(exc))
         raise SystemExit(1) from None
-    except Offline:
+    except Offline as exc:
         print(
-            'Sem comunicação com a API. O estado local foi preservado. Para pareamento pendente, restabeleça a rede e use pair --resume.'
+            connection_guidance(exc)
+            + ' Para pareamento pendente, restabeleça a rede e use pair --resume.'
         )
         raise SystemExit(1) from None
     except ApiFailure as exc:
@@ -196,10 +218,9 @@ def main():
             410: 'Autorização ou código expirado. Reconcilie a tentativa anterior antes de iniciar outra inspeção.',
             422: 'Dados da operação inválidos. Confira o código temporário e a configuração do equipamento.',
             429: 'Limite de tentativas atingido. Aguarde antes de repetir.',
-        }.get(
-            exc.status,
-            'Falha de comunicação com a API. Preserve a tentativa local e tente novamente após verificar o servidor.',
-        )
+        }.get(exc.status, connection_guidance(exc))
+        if exc.status == 401:
+            guidance = connection_guidance(exc)
         print(f'Operação recusada pela API (HTTP {exc.status}). {guidance}')
         raise SystemExit(1) from None
     except Exception as exc:

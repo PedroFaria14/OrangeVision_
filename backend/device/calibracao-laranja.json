@@ -1,0 +1,123 @@
+{
+  "version": "laranja-cor-v3-20261109",
+  "validated": true,
+  "segmentation_method": "yolox-s-grabcut-v1",
+  "color_fallback": true,
+  "minimum_fruit_area_pixels": 8000,
+  "fruit_hsv": [
+    [
+      [
+        5,
+        70,
+        60
+      ],
+      [
+        90,
+        255,
+        255
+      ]
+    ]
+  ],
+  "orange_hsv": [
+    [
+      [
+        5,
+        80,
+        90
+      ],
+      [
+        30,
+        255,
+        255
+      ]
+    ]
+  ],
+  "abnormal_hsv": [
+    [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        179,
+        255,
+        70
+      ]
+    ],
+    [
+      [
+        0,
+        40,
+        30
+      ],
+      [
+        30,
+        255,
+        140
+      ]
+    ]
+  ],
+  "score_rules": {
+    "orange_color_ratio": {
+      "low": 0.3,
+      "high": 0.85,
+      "direction": "higher",
+      "weight": 0.35
+    },
+    "abnormal_region_ratio": {
+      "low": 0.03,
+      "high": 0.15,
+      "direction": "lower",
+      "weight": 0.45
+    },
+    "circularity": {
+      "low": 0.5,
+      "high": 0.85,
+      "direction": "higher",
+      "weight": 0.1
+    },
+    "asymmetry": {
+      "low": 0.05,
+      "high": 0.3,
+      "direction": "lower",
+      "weight": 0.1
+    }
+  },
+  "attention_min_score": 45,
+  "approval_min_score": 75,
+  "classification_rules": {
+    "method": "ripeness-rules-v1",
+    "green_hsv": [
+      [
+        [
+          31,
+          50,
+          50
+        ],
+        [
+          90,
+          255,
+          255
+        ]
+      ]
+    ],
+    "verde_min_green_ratio": 0.35,
+    "passou_min_abnormal_ratio": 0.12,
+    "boa_max_abnormal_ratio": 0.05,
+    "boa_max_green_ratio": 0.2,
+    "boa_min_orange_ratio": 0.6
+  },
+  "validation_report": {
+    "photos": 9,
+    "hits": 9,
+    "date": "2026-11-09",
+    "note": "Conferência com fotos rotuladas; avalia apenas a superfície visível."
+  },
+  "abnormal_detection": {
+    "method": "contrast-v1",
+    "min_relative_contrast": 0.25,
+    "max_stain_fraction": 0.25,
+    "highlight_percentile": 90
+  }
+}

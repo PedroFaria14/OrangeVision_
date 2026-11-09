@@ -42,12 +42,17 @@ class CameraReview:
                 row['id'], frame, row['captured_at'], row['detection'], row['grant']
             )
 
-    def take(self, frame, detection, captured_at, grant):
+    def take(self, frame, detection, captured_at, grant, allow_undetected=False):
+        """allow_undetected: captura manual quando a calibração localiza a fruta pela cor.
+
+        O detector COCO não reconhece bem laranjas verdes ou manchadas; nesse modo a
+        pessoa decide capturar e a qualidade é avaliada depois, pela cor.
+        """
         import cv2
 
         if self.photo is not None or self.sending:
             return False
-        if detection['status'] != 'detected':
+        if detection['status'] != 'detected' and not allow_undetected:
             return False
         ok, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
         if not ok:

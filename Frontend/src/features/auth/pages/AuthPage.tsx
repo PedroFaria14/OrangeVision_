@@ -1,9 +1,17 @@
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Divider,
+  Stack,
+  Typography,
+} from '@mui/material';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { Page } from '@/shared/ui/Page';
+import { Brand } from '@/shared/ui/Brand';
 import { login, register } from '../api/session';
+import { AuthForm } from '../components/AuthForm';
 import { useSession } from '../hooks/useSession';
-import { useAuthForm } from '../hooks/useAuthForm';
-import styles from '@/shared/ui/public.module.css';
 
 export default function AuthPage({
   registering = false,
@@ -13,127 +21,86 @@ export default function AuthPage({
   const auth = useSession();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const created = params.get('registered') === '1';
   const requested = params.get('next') || '/dashboard';
   const destination = /^\/dashboard(?:\/|\?|$)/.test(requested)
     ? requested
     : '/dashboard';
-  const form = useAuthForm(registering, async ({ name, email, password }) => {
-    if (registering) {
-      await register(name, email, password);
-      navigate('/login?registered=1');
-    } else {
-      await auth.replace(await login(email, password));
-      navigate(destination, { replace: true });
-    }
-  });
-  if (auth.pending) return <p role="status">Consultando sessão…</p>;
-  if (auth.error)
-    return (
-      <div role="alert">
-        <p>Não foi possível consultar a sessão.</p>
-        <button onClick={auth.retry}>Tentar novamente</button>
-      </div>
-    );
   if (auth.session) return <Navigate to={destination} replace />;
-  const field = (
-    name: 'name' | 'email' | 'password' | 'confirmation',
-    label: string,
-    type: string,
-    autocomplete: string,
-  ) => (
-    <div className={styles.field}>
-      <label htmlFor={`auth-${name}`}>{label}</label>
-
-      <div className={styles.inputWrapper}>
-        <input
-          id={`auth-${name}`}
-          name={name}
-          type={type}
-          autoComplete={autocomplete}
-          required
-          maxLength={name === 'email' ? 254 : name === 'name' ? 100 : 128}
-          aria-invalid={!!form.fields[name]}
-          aria-describedby={form.fields[name] ? `error-${name}` : undefined}
-        />
-
-        {(name === 'password' || name === 'confirmation') && (
-          <button
-            className={styles.passwordToggle}
-            type="button"
-            onClick={form.toggleVisibility}
-            aria-label={`${form.show ? 'Ocultar' : 'Mostrar'} ${
-              name === 'confirmation' ? 'confirmação de senha' : 'senha'
-            }`}
-            title={form.show ? 'Ocultar senha' : 'Mostrar senha'}
-            aria-controls={`auth-${name}`}
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
-              <circle cx="12" cy="12" r="3" />
-              {form.show && <path d="m3 3 18 18" />}
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {form.fields[name] && (
-        <span id={`error-${name}`} role="alert">
-          {form.fields[name]}
-        </span>
-      )}
-    </div>
-  );
   return (
-    <Page title={registering ? 'Criar conta' : 'Entrar'}>
-      {params.get('registered') === '1' && (
-        <p role="status">Conta criada. Entre para continuar.</p>
-      )}
-      <form
-        noValidate
-        aria-busy={form.busy}
-        onSubmit={(event) => void form.handleSubmit(event)}
-      >
-        {form.error && <p role="alert">{form.error}</p>}
-        <fieldset disabled={form.busy}>
-          <legend>{registering ? 'Cadastro' : 'Acesso à conta'}</legend>
-          {registering && field('name', 'Nome', 'text', 'name')}
-          {field('email', 'E-mail', 'email', 'username')}
-          {field(
-            'password',
-            'Senha',
-            form.show ? 'text' : 'password',
-            registering ? 'new-password' : 'current-password',
+    <Stack sx={{ width: '100%', maxWidth: 380 }} spacing={{ xs: 2, md: 2.5 }}>
+      <Box sx={{ textAlign: 'center', mb: 0.5 }}>
+        <Brand large />
+        <Typography
+          component="h1"
+          sx={{
+            fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 650,
+            fontSize: 23,
+            mt: 2,
+            mb: 1,
+          }}
+        >
+          {registering ? 'Criar conta' : 'Entrar'}
+        </Typography>
+        <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>
+          {registering
+            ? 'Crie sua conta e comece a acompanhar.'
+            : 'Acesse sua conta para continuar.'}
+        </Typography>
+      </Box>
+      {auth.pending ? (
+        <Stack
+          role="status"
+          direction="row"
+          sx={{ gap: 2, alignItems: 'center' }}
+        >
+          <CircularProgress size={22} aria-label="Verificação da sessão" />
+          <Typography variant="body2">Verificando sua sessão…</Typography>
+        </Stack>
+      ) : auth.error ? (
+        <Alert
+          severity="error"
+          action={<Button onClick={auth.retry}>Tentar novamente</Button>}
+        >
+          Não foi possível confirmar sua sessão. Tente novamente antes de entrar
+          ou criar uma conta.
+        </Alert>
+      ) : (
+        <>
+          {created && (
+            <Alert severity="success">
+              Conta criada. Entre para continuar. Em Equipamentos, você verá as
+              opções de cadastro disponíveis neste ambiente.
+            </Alert>
           )}
-          {registering && <p>De 12 a 128 caracteres. Frases são permitidas.</p>}
-          {registering &&
-            field(
-              'confirmation',
-              'Confirmar senha',
-              form.show ? 'text' : 'password',
-              'new-password',
-            )}
-
-          <button type="submit">
-            {form.busy ? 'Enviando…' : registering ? 'Criar conta' : 'Entrar'}
-          </button>
-        </fieldset>
-      </form>
-      <p>
-        <Link to={registering ? '/login' : '/registrar'}>
-          {registering ? 'Fazer login' : 'Criar uma conta'}
-        </Link>
-      </p>
-    </Page>
+          <AuthForm
+            key={registering ? 'register' : 'login'}
+            registering={registering}
+            submit={async ({ name, email, password }) => {
+              if (registering) {
+                await register(name, email, password);
+                navigate('/login?registered=1');
+              } else {
+                const session = await login(email, password);
+                await auth.replace(session);
+                navigate(destination, { replace: true });
+              }
+            }}
+          />
+          <Divider sx={{ color: 'text.secondary', fontSize: 12 }}>
+            {registering ? 'Já tem uma conta?' : 'ou'}
+          </Divider>
+          <Button
+            component={Link}
+            variant={registering ? 'text' : 'outlined'}
+            to={registering ? '/login' : '/registrar'}
+            sx={{ minHeight: 46 }}
+          >
+            {registering ? 'Fazer login' : 'Criar uma conta'}
+          </Button>
+        </>
+      )}
+    </Stack>
   );
 }

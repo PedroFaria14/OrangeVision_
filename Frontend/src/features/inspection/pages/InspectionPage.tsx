@@ -1,261 +1,364 @@
+import { useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { Page } from '@/shared/ui/Page';
+import { Icon } from '@/shared/ui/Icon';
 import { formatDate } from '@/shared/lib/format';
+import { Link as RouterLink } from 'react-router-dom';
+import { useSession } from '@/features/auth/hooks/useSession';
 import { useInspection } from '../hooks/useInspection';
-import styles from '@/shared/ui/dashboard.module.css';
 
-const states = {
-  pending: 'Aguardando pareamento',
-  active: 'Pareada',
-  closing: 'Aguardando encerramento local',
-  closed: 'Encerrada',
-  expired: 'Expirada',
-};
-
-export default function InspectionPage() {
-  const value = useInspection();
-  const refresh = () => {
-    void value.config.refetch();
-    if (value.enabled) {
-      void value.devices.refetch();
-      void value.current.refetch();
+function InspectionWorkspace() {
+  const {
+    config,
+    enabled,
+    devices,
+    current,
+    device,
+    setDevice,
+    busy,
+    error,
+    issued,
+    hasAttempt,
+    begin,
+    end,
+    sessions,
+  } = useInspection();
+  // Encerrar uma sessão ativa derruba a bancada até novo pareamento: pedir confirmação.
+  const [confirmClose, setConfirmClose] = useState<string | null>(null);
+  // Só a atualização pedida pela pessoa mostra "Atualizando…"; consultas em
+  // segundo plano não fazem o botão piscar.
+  const [refreshing, setRefreshing] = useState(false);
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      await Promise.allSettled([
+        config.refetch(),
+        ...(enabled ? [devices.refetch(), current.refetch()] : []),
+      ]);
+    } finally {
+      setRefreshing(false);
     }
-  };
-
-  const refreshing =
-    value.config.isFetching ||
-    (value.enabled && (value.devices.isFetching || value.current.isFetching));
-
-  const blocked =
-    value.busy ||
-    value.current.isPending ||
-    value.current.isError ||
-    !value.device ||
-    (!value.hasAttempt &&
-      value.sessions.some((item) => item.device_id === value.device));
+  }
   return (
     <Page
       title="Inspeções"
-      description="Identifique o operador e pareie o equipamento autorizado."
+      eyebrow="OPERAÇÃO AUTORIZADA"
+      description="Identifique o operador e pareie uma sessão com o equipamento da bancada."
+      action={
+        <Button
+          startIcon={<Icon name="refresh" />}
+          loading={refreshing}
+          loadingPosition="start"
+          disabled={busy}
+          onClick={() => void refresh()}
+        >
+          {refreshing ? 'Atualizando…' : 'Atualizar sessões'}
+        </Button>
+      }
     >
-      <button
-        type="button"
-        onClick={refresh}
-        disabled={refreshing || value.busy}
-        aria-busy={refreshing}
-      >
-        {refreshing ? 'Atualizando…' : 'Atualizar sessões'}
-      </button>
-      {value.config.isPending && (
-        <p role="status">Consultando disponibilidade…</p>
+      {config.isPending && (
+        <Typography role="status">
+          Verificando disponibilidade do recurso opcional…
+        </Typography>
       )}
-      {value.config.isError && (
-        <p role="alert">
+      {config.isError && (
+        <Alert severity="error">
           Não foi possível consultar a configuração de inspeções.
-        </p>
+        </Alert>
       )}
-      {value.config.data && !value.enabled && (
-        <section>
-          <h2>Como iniciar</h2>
-          <ol>
-            <li>Selecione um equipamento autorizado para sua conta.</li>
-            <li>Clique em Iniciar inspeção para gerar o código temporário.</li>
-            <li>
-              No programa Python do equipamento, utilize o código para parear
-              esta sessão.
-            </li>
-            <li>
-              Após o pareamento, execute a captura pelo programa local. Consulte
-              os resultados no dashboard e no histórico.
-            </li>
-          </ol>
-          <p>
-            Os resultados desta sessão ficam associados à conta que iniciou a
-            inspeção. O pareamento autoriza a sessão; ele não liga a câmera.
-          </p>
-        </section>
+      {config.data && !config.data.enabled && (
+        <Alert severity="info">
+          Inspeções são opcionais e estão desativadas neste ambiente. Login,
+          histórico e dashboard continuam disponíveis. A ativação exige a
+          migration e o provisionamento do equipamento.
+        </Alert>
       )}
-      {value.enabled && (
+      {enabled && (
         <>
-          <section>
-            <h2>Como iniciar</h2>
-            <ol>
-              <li>Selecione um equipamento autorizado para sua conta.</li>
-              <li>
-                Clique em “Iniciar inspeção” para gerar o código temporário de
-                pareamento.
-              </li>
-              <li>
-                Informe esse código no programa Python executado no equipamento.
-              </li>
-              <li>
-                Inicie a captura no equipamento e acompanhe os resultados no
-                dashboard e no histórico.
-              </li>
-            </ol>
-            <p>
-              As análises desta sessão ficam vinculadas à conta que iniciou a
-              inspeção. O pareamento não liga a câmera remotamente.
-            </p>
-          </section>
-          {value.error && <p role="alert">{value.error}</p>}
-          {(value.devices.isError || value.current.isError) && (
-            <p role="alert">
-              Não foi possível consultar equipamentos ou sessões. Atualize antes
-              de iniciar.
-            </p>
-          )}
-          <section>
-            <h2>Iniciar uma inspeção</h2>
-            {value.devices.isPending ? (
-              <p role="status">Consultando equipamentos autorizados…</p>
-            ) : value.devices.isError ? (
-              <p>Lista de equipamentos indisponível.</p>
-            ) : value.devices.data?.length === 0 ? (
-              <p>
-                Nenhum equipamento foi liberado para esta conta. O responsável
-                precisa provisionar e vincular o equipamento.
-              </p>
-            ) : (
-              <>
-                <p>
-                  <label htmlFor="inspection-device">
-                    Equipamento autorizado
-                  </label>{' '}
-                  <select
-                    id="inspection-device"
-                    value={value.device}
-                    onChange={(event) => value.setDevice(event.target.value)}
-                    disabled={value.busy || value.hasAttempt}
-                  >
-                    <option value="">Selecione um equipamento</option>
-                    {value.devices.data?.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </p>
-                <button
-                  disabled={blocked}
-                  onClick={() => void value.begin()}
-                  aria-describedby="inspection-help"
-                >
-                  {value.busy
-                    ? 'Confirmando…'
-                    : value.hasAttempt
-                      ? 'Tentar confirmar início'
-                      : 'Iniciar inspeção'}
-                </button>
-                <p id="inspection-help">
-                  {!value.device
-                    ? 'Selecione um equipamento para iniciar.'
-                    : value.current.isPending
-                      ? 'Aguarde a consulta das sessões.'
-                      : value.current.isError
-                        ? 'Atualize as sessões antes de iniciar.'
-                        : value.sessions.some(
-                              (item) => item.device_id === value.device,
-                            ) && !value.hasAttempt
-                          ? 'Equipamento com sessão existente: conclua seu encerramento antes de iniciar outra.'
-                          : 'Informe o código temporário no executor local após iniciar.'}
-                </p>
-              </>
-            )}
-          </section>
-          {value.current.isPending && <p role="status">Consultando sessões…</p>}
-
-          {!value.current.isPending &&
-            !value.current.isError &&
-            value.sessions.length === 0 && (
-              <p role="status">Nenhuma sessão em andamento para sua conta.</p>
-            )}
-
-          {value.sessions.map((item) => (
-            <section key={item.id}>
-              <h2>Operador: {item.operator_name}</h2>
-              <p>
-                Estado:{' '}
-                <span
-                  className={styles.inspectionState}
-                  data-state={item.state}
-                >
-                  {states[item.state]}
-                </span>
-              </p>
-              <p>Sessão: {item.id}</p>
-
-              <p>
-                Equipamento:{' '}
-                {value.devices.data?.find(
-                  (option) => option.id === item.device_id,
-                )?.name || item.device_id}
-              </p>
-
-              {item.state === 'pending' &&
-                (value.issued?.id === item.id ? (
-                  <>
-                    <p>
-                      <label htmlFor={`code-${item.id}`}>
-                        Código temporário de pareamento
-                      </label>{' '}
-                      <input
-                        id={`code-${item.id}`}
-                        readOnly
-                        value={value.issued.code}
-                        size={34}
-                      />
-                    </p>
-                    <p>
-                      Validade: {formatDate(item.pairing_expires_at)}. Não é
-                      senha nem ID do equipamento.
-                    </p>
-                  </>
-                ) : (
-                  <p>
-                    O código não pode ser recuperado nesta página. Se já tentou
-                    parear, use pair --resume no equipamento; caso contrário,
-                    cancele esta inspeção ou aguarde a expiração.
-                  </p>
+          <Alert severity="info">
+            Uma sessão pertence à sua conta, não a quem estiver logado no
+            momento da sincronização. Parear não abre a câmera remotamente.
+          </Alert>
+          <Paper
+            variant="outlined"
+            component="section"
+            aria-labelledby="inspection-how-to"
+            sx={{ p: { xs: 2, sm: 3 } }}
+          >
+            <Stack spacing={1}>
+              <Typography id="inspection-how-to" component="h2" variant="h6">
+                Como iniciar
+              </Typography>
+              <Box component="ol" sx={{ m: 0, pl: 3 }}>
+                {[
+                  'Selecione o equipamento autorizado e clique em “Iniciar inspeção”. O código temporário vale 5 minutos.',
+                  'No Raspberry, abra a câmera (./start.sh) e aperte [P] para informar o código, ou use ./start.sh parear.',
+                  'Com a sessão pareada, posicione uma laranja por vez, inteira e com fundo liso. Capture com [C] e confirme com [U].',
+                  'Acompanhe em Amostras: quando a avaliação local e o Gemini concordam, ou só um deles dá categoria, o resultado entra sozinho no gráfico. Divergências aguardam sua validação.',
+                  'Ao terminar, use “Encerrar inspeção”.',
+                ].map((step) => (
+                  <Typography key={step} component="li" variant="body2">
+                    {step}
+                  </Typography>
                 ))}
-
-              {item.state === 'active' && (
+              </Box>
+            </Stack>
+          </Paper>
+          {error && <Alert severity="error">{error}</Alert>}
+          {(devices.isError || current.isError) && (
+            <Alert severity="error">
+              Não foi possível consultar equipamentos/sessões. Verifique a
+              conexão e tente atualizar as sessões.
+            </Alert>
+          )}
+          <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
+            <Stack spacing={2}>
+              <Typography component="h2" variant="h6">
+                Iniciar uma inspeção
+              </Typography>
+              {devices.isPending ? (
+                <Typography role="status">
+                  Consultando equipamentos autorizados…
+                </Typography>
+              ) : devices.isError ? (
+                <Typography color="text.secondary">
+                  A lista de equipamentos não está disponível. Atualize as
+                  sessões para tentar novamente.
+                </Typography>
+              ) : devices.data?.length === 0 ? (
+                <Alert
+                  severity="info"
+                  action={
+                    <Button component={RouterLink} to="/dashboard/dispositivos">
+                      Equipamentos
+                    </Button>
+                  }
+                >
+                  Nenhum equipamento foi liberado para esta conta. O responsável
+                  pode confirmar vínculos anteriores, ou você pode cadastrar um
+                  equipamento novo em Equipamentos.
+                </Alert>
+              ) : (
                 <>
-                  <p>
-                    Autorização até {formatDate(item.authorization_expires_at)}.
-                    Isso não comprova câmera online.
-                  </p>
-                  <p>
-                    Sem internet, o executor pode continuar até o vencimento da
-                    autorização. O encerramento remoto só será observado ao
-                    consultar a API novamente.
-                  </p>
+                  <TextField
+                    select
+                    label="Equipamento autorizado"
+                    value={device}
+                    onChange={(event) => setDevice(event.target.value)}
+                    disabled={busy || hasAttempt}
+                    sx={{ maxWidth: 480 }}
+                  >
+                    <MenuItem value="">Selecione um equipamento</MenuItem>
+                    {devices.data?.map((item) => (
+                      <MenuItem key={item.id} value={item.id}>
+                        {item.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <Button
+                    variant="contained"
+                    startIcon={<Icon name="device" />}
+                    onClick={() => void begin()}
+                    aria-describedby="inspection-start-help"
+                    disabled={
+                      busy ||
+                      current.isPending ||
+                      current.isError ||
+                      !device ||
+                      (!hasAttempt &&
+                        sessions.some((item) => item.device_id === device))
+                    }
+                    sx={{ alignSelf: 'flex-start' }}
+                  >
+                    {busy
+                      ? 'Confirmando…'
+                      : hasAttempt
+                        ? 'Tentar confirmar início'
+                        : 'Iniciar inspeção'}
+                  </Button>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    role="status"
+                    id="inspection-start-help"
+                  >
+                    {current.isPending
+                      ? 'Aguarde a consulta das sessões existentes.'
+                      : current.isError
+                        ? 'Atualize as sessões antes de iniciar uma inspeção.'
+                        : busy
+                          ? 'Aguarde a confirmação da operação.'
+                          : hasAttempt
+                            ? 'Existe uma tentativa pendente. Confirme seu início antes de trocar de equipamento.'
+                            : !device
+                              ? 'Selecione um equipamento autorizado para iniciar.'
+                              : sessions.some(
+                                    (item) => item.device_id === device,
+                                  )
+                                ? 'Este equipamento já possui uma sessão. Conclua seu encerramento antes de iniciar outra.'
+                                : 'Após iniciar, informe o código temporário no executor local. A câmera é necessária para capturar; periféricos adicionais dependem da bancada.'}
+                  </Typography>
                 </>
               )}
-
-              {item.state === 'closing' && (
-                <p>
-                  Aguarde confirmação do executor local. Registros anteriores
-                  mantêm o operador original.
-                </p>
-              )}
-
-              <button
-                disabled={
-                  value.busy ||
-                  item.state === 'closing' ||
-                  item.state === 'closed' ||
-                  item.state === 'expired'
-                }
-                onClick={() => void value.end(item.id)}
-              >
-                {item.state === 'pending'
-                  ? 'Cancelar pareamento'
-                  : 'Solicitar encerramento'}
-              </button>
-            </section>
+            </Stack>
+          </Paper>
+          {current.isPending && (
+            <Typography role="status">Consultando suas sessões…</Typography>
+          )}
+          {sessions.map((item) => (
+            <Paper
+              key={item.id}
+              variant="outlined"
+              sx={{ p: { xs: 2, sm: 3 } }}
+            >
+              <Stack spacing={2}>
+                <Stack
+                  direction="row"
+                  sx={{
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 2,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <Typography component="h2" variant="h6">
+                    Operador: {item.operator_name}
+                  </Typography>
+                  <Chip
+                    label={
+                      {
+                        pending: 'Aguardando pareamento',
+                        active: 'Pareada',
+                        closing: 'Encerramento pendente',
+                        closed: 'Encerrada',
+                        expired: 'Expirada',
+                      }[item.state]
+                    }
+                    size="small"
+                    variant="outlined"
+                  />
+                </Stack>
+                <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                  Sessão: {item.id}
+                </Typography>
+                <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                  Equipamento:{' '}
+                  {devices.data?.find((option) => option.id === item.device_id)
+                    ?.name || item.device_id}
+                </Typography>
+                {item.state === 'pending' &&
+                  (issued?.id === item.id ? (
+                    <TextField
+                      label="Código temporário de pareamento"
+                      value={issued.code}
+                      slotProps={{ input: { readOnly: true } }}
+                      helperText={`Informe esse código no executor local do Pi. Validade: ${formatDate(item.pairing_expires_at)}. Não é uma senha de usuário.`}
+                    />
+                  ) : (
+                    <Typography color="text.secondary" variant="body2">
+                      O código não é recuperável nesta página. Se o executor já
+                      tentou parear, use pair --resume no equipamento para
+                      recuperar a tentativa salva. Se nenhuma tentativa foi
+                      feita, cancele esta inspeção ou aguarde sua expiração
+                      antes de iniciar outra com um novo código.
+                    </Typography>
+                  ))}
+                {item.state === 'active' && (
+                  <Typography variant="body2" color="text.secondary">
+                    Autorização local válida até{' '}
+                    {formatDate(item.authorization_expires_at)}. Isso não
+                    comprova câmera online ou disponível. Se a confirmação local
+                    se perdeu, use pair --resume no equipamento antes de tentar
+                    criar outra sessão.
+                  </Typography>
+                )}
+                {item.state === 'active' && (
+                  <Alert severity="warning">
+                    Sem internet, o equipamento pode continuar capturando até o
+                    vencimento da autorização local. Um pedido de encerramento
+                    remoto só será observado quando ele consultar a API
+                    novamente. O operador deve encerrar localmente antes de
+                    trocar de pessoa.
+                  </Alert>
+                )}
+                {item.state === 'closing' && (
+                  <Alert severity="info">
+                    Sessão antiga aguardando o equipamento. Encerre agora para
+                    liberar o equipamento e iniciar outra inspeção. Os registros
+                    anteriores continuam com o operador original.
+                  </Alert>
+                )}
+                <Box>
+                  <Button
+                    variant="outlined"
+                    disabled={
+                      busy || ['closed', 'expired'].includes(item.state)
+                    }
+                    onClick={() =>
+                      item.state === 'active' || item.state === 'closing'
+                        ? setConfirmClose(item.id)
+                        : void end(item.id)
+                    }
+                  >
+                    {item.state === 'pending'
+                      ? 'Cancelar pareamento'
+                      : 'Encerrar inspeção'}
+                  </Button>
+                </Box>
+              </Stack>
+            </Paper>
           ))}
         </>
       )}
+      <Dialog
+        open={confirmClose !== null}
+        onClose={() => setConfirmClose(null)}
+        aria-labelledby="confirm-close-title"
+      >
+        <DialogTitle id="confirm-close-title">
+          Encerrar esta inspeção?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            A sessão é encerrada na hora: o Raspberry para de enviar fotos desta
+            sessão e pede novo pareamento [P] em alguns segundos. Fotos tiradas
+            antes do encerramento continuam valendo e ficam no histórico.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmClose(null)}>Manter sessão</Button>
+          <Button
+            color="warning"
+            onClick={() => {
+              const id = confirmClose;
+              setConfirmClose(null);
+              if (id) void end(id);
+            }}
+          >
+            Encerrar inspeção
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Page>
   );
+}
+
+export default function InspectionPage() {
+  const { session } = useSession();
+  return session ? <InspectionWorkspace key={session.user.id} /> : null;
 }

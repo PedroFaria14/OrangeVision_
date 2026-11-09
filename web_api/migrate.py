@@ -14,7 +14,7 @@ EXPECTED_TABLES = ('users', 'sessions', 'device_access', 'auth_attempts')
 def main():
     parser = argparse.ArgumentParser(description='Migration aditiva de autenticação OrangeVision.')
     parser.add_argument('--apply', action='store_true', help='Executar a migration explicitamente.')
-    parser.add_argument('--migration', choices=('001', '002', '003', '004', '005'), default='001')
+    parser.add_argument('--migration', choices=('001', '002', '003', '004', '005', '006', '007', '008'), default='001')
     args = parser.parse_args()
     migration = (
         MIGRATION
@@ -25,6 +25,9 @@ def main():
             '003': '003_image_samples.sql',
             '004': '004_sample_executor_detection.sql',
             '005': '005_sample_review_authorization.sql',
+            '006': '006_device_registration.sql',
+            '007': '007_sample_analyses.sql',
+            '008': '008_dual_evaluations.sql',
         }[args.migration]
     )
     expected = (
@@ -32,6 +35,10 @@ def main():
         if args.migration == '001'
         else ('device_credentials', 'inspection_sessions', 'ingestion_receipts')
         if args.migration == '002'
+        else ('managed_devices', 'device_commands')
+        if args.migration == '006'
+        else ('sample_evaluations', 'gemini_jobs', 'gemini_attempts', 'sample_decisions')
+        if args.migration == '008'
         else ('image_samples',)
         if args.migration == '003'
         else ('image_samples', 'sample_executors')
@@ -55,6 +62,14 @@ def main():
                     'SELECT to_regclass(%s) IS NOT NULL', (f'orangevision_web.{table}',)
                 ).fetchone()[0]:
                     raise RuntimeError('Estrutura esperada não encontrada após a migration.')
+            if args.migration == '007' and not db.execute(
+                "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='orangevision_web' AND table_name='image_samples' AND column_name='analysis_id')"
+            ).fetchone()[0]:
+                raise RuntimeError('Vínculo entre amostras e análises não encontrado.')
+            if args.migration == '008' and not db.execute(
+                "SELECT to_regclass('orangevision_web.effective_analyses') IS NOT NULL AND (SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='analises' AND column_name IN ('cor_media','regioes_anormais','circularidade','assimetria','score_visual') AND is_nullable='YES')=5"
+            ).fetchone()[0]:
+                raise RuntimeError('Projeção de decisões ou métricas opcionais não confirmadas.')
         print(
             f'Migration {migration.name} aplicada. Tabelas confirmadas: {len(expected)}/{len(expected)}.'
         )

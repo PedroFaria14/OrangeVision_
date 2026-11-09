@@ -102,6 +102,8 @@ class Analysis(BaseModel):
     synced_at: None = None
     inspection_session_id: UUID | None = None
     classification_reason: str | None = None
+    evaluation_source: Literal['local', 'gemini', 'human'] | None = None
+    decision_revision: int = 0
 
 
 class AnalysisPage(BaseModel):

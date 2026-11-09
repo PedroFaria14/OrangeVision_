@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@/shared/api/client';
 import { useSession } from '@/features/auth/hooks/useSession';
+import { authorizedDeviceId } from '@/shared/lib/device_selection';
 import {
   closeInspection,
   currentInspections,
@@ -35,15 +36,19 @@ export function useInspection() {
     refetchInterval: 10000,
     refetchIntervalInBackground: false,
   });
-  const [device, setDevice] = useState('');
+  const [selection, setDevice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [issued, setIssued] = useState<{ id: string; code: string } | null>(
     null,
   );
   const [hasAttempt, setHasAttempt] = useState(false);
+  const [attemptDevice, setAttemptDevice] = useState('');
   const lock = useRef(false);
   const attempt = useRef<Attempt | null>(null);
+  const device = hasAttempt
+    ? attemptDevice
+    : authorizedDeviceId(selection, devices.data);
   async function begin() {
     if (!session || lock.current || !device) return;
     lock.current = true;
@@ -55,6 +60,7 @@ export function useInspection() {
       pairing_code: createCode(),
     };
     const command = attempt.current;
+    setAttemptDevice(command.device_id);
     setHasAttempt(true);
     try {
       const result = await startInspection(command, session.csrf_token);

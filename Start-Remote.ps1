@@ -1,7 +1,7 @@
 ﻿param(
     [ValidateSet('Frontend', 'Samples', 'Camera', 'Auto')][string]$Mode = 'Frontend',
-    [string]$ApiUrl = 'https://orangevision.onrender.com',
-    [ValidateRange(1, 65535)][int]$FrontendPort = 5174,
+    [string]$ApiUrl = '',
+    [ValidateRange(1, 65535)][int]$FrontendPort = 5173,
     [switch]$NoBrowser
 )
 $ErrorActionPreference = 'Stop'
@@ -10,6 +10,11 @@ $frontend = Join-Path $root 'Frontend'
 $vite = Join-Path $frontend 'node_modules\vite\bin\vite.js'
 if (-not (Test-Path -LiteralPath $vite)) { throw 'Instale as dependências com yarn install na pasta Frontend.' }
 $node = (Get-Command node -ErrorAction Stop).Source
+if ([string]::IsNullOrWhiteSpace($ApiUrl)) {
+    $resolved = & $node --experimental-strip-types (Join-Path $frontend 'scripts\resolve-api-origin.ts')
+    if ($LASTEXITCODE -ne 0) { throw 'Não foi possível carregar a URL da API a partir do Frontend/.env.' }
+    $ApiUrl = ($resolved -join '').Trim()
+}
 $api = [uri]$ApiUrl
 if ($api.Scheme -ne 'https' -or $api.UserInfo -or $api.AbsolutePath -ne '/' -or $api.Query -or $api.Fragment) {
     throw 'ApiUrl deve ser a origem HTTPS da API, sem caminho ou credenciais.'
@@ -24,13 +29,19 @@ if ($Mode -ne 'Frontend') {
     $workers = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^python(w)?\.exe$' -and $_.CommandLine -match 'backend\.device(\s+samples|\.inspect)' })
     if ($workers) { throw 'Encerre o consumidor anterior com Ctrl+C ou a câmera com Q para iniciar o executor na API remota. Use -Mode Frontend para abrir somente o site.' }
 }
-$health = Invoke-RestMethod -Uri "$ApiUrl/health" -TimeoutSec 60
-if ($health.service -ne 'orangevision-web') { throw 'A URL não respondeu como API OrangeVision.' }
+& $node --experimental-strip-types (Join-Path $frontend 'scripts\check-api-status.ts') --url $ApiUrl
+$apiAvailable = $LASTEXITCODE -eq 0
+if (-not $apiAvailable) {
+    if ($Mode -ne 'Frontend') { throw 'API indisponível para o executor. Use o modo local ou tente novamente depois.' }
+    Write-Warning 'O site será aberto com o indicador de status. Login e dados remotos dependem da recuperação da API.'
+}
 $previousProxy = $env:API_PROXY_TARGET
 $previousApi = $env:WEB_API_BASE_URL
 $previousFront = $env:WEB_FRONTEND_ORIGIN
+$previousRender = $env:RENDER_API_ORIGIN
 try {
     $env:API_PROXY_TARGET = $ApiUrl
+    $env:RENDER_API_ORIGIN = $ApiUrl
     $env:WEB_API_BASE_URL = $ApiUrl
     $env:WEB_FRONTEND_ORIGIN = $frontOrigin
     $viteProcess = Start-Process -FilePath $node -ArgumentList @("`"$vite`"", '--host', '127.0.0.1', '--port', "$FrontendPort", '--strictPort') -WorkingDirectory $frontend -PassThru
@@ -56,4 +67,5 @@ try {
     $env:API_PROXY_TARGET = $previousProxy
     $env:WEB_API_BASE_URL = $previousApi
     $env:WEB_FRONTEND_ORIGIN = $previousFront
+    $env:RENDER_API_ORIGIN = $previousRender
 }

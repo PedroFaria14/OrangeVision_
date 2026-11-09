@@ -157,7 +157,7 @@ def test_headless_camera_does_not_require_highgui(tmp_path, monkeypatch):
         100,
         100,
     )
-    monkeypatch.setattr(app.DeviceSettings, 'load', lambda: settings)
+    monkeypatch.setattr(app.DeviceSettings, 'load', lambda **kwargs: settings)
     calls = []
 
     class Camera:
@@ -195,6 +195,53 @@ def test_headless_camera_does_not_require_highgui(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, 'argv', ['inspect', '--headless'])
     app.main()
     assert len(calls) == 4
+
+
+def test_camera_uses_configured_validated_calibration_and_cli_override(tmp_path):
+    import json
+    from types import SimpleNamespace
+
+    from backend.device.inspect import load_camera_calibration
+
+    configured = tmp_path / 'configured.json'
+    explicit = tmp_path / 'explicit.json'
+    base = {**synthetic_calibration(), 'segmentation_method': 'yolox-s-grabcut-v1'}
+    configured.write_text(json.dumps({**base, 'version': 'configured-test'}))
+    explicit.write_text(json.dumps({**base, 'version': 'explicit-test'}))
+    settings = SimpleNamespace(calibration_path=configured)
+    assert load_camera_calibration(settings)['version'] == 'configured-test'
+    assert load_camera_calibration(settings, explicit)['version'] == 'explicit-test'
+    assert load_camera_calibration(SimpleNamespace(calibration_path=None)) is None
+
+
+def test_provisional_calibration_cannot_be_promoted_to_quality_classification(tmp_path):
+    import json
+    from types import SimpleNamespace
+
+    from backend.device.inspect import load_camera_calibration
+    from backend.device.segmentation import VisionFailure
+
+    provisional = tmp_path / 'provisional.json'
+    provisional.write_text(json.dumps({'version': '0.1-provisorio', 'fruit_hsv_ranges': []}))
+    with pytest.raises(VisionFailure, match='validada'):
+        load_camera_calibration(SimpleNamespace(calibration_path=provisional))
+
+
+@pytest.mark.parametrize('kind', ['directory', 'missing', 'invalid-json', 'non-object'])
+def test_bad_calibration_path_or_file_is_a_clear_vision_failure(tmp_path, kind):
+    from backend.device.segmentation import VisionFailure
+    from backend.device.vision import CalibratedVision
+
+    path = tmp_path / 'calibration.json'
+    if kind == 'directory':
+        path.mkdir()
+    elif kind == 'invalid-json':
+        path.write_text('{invalid')
+    elif kind == 'non-object':
+        path.write_text('[]')
+    with pytest.raises(VisionFailure) as exc:
+        CalibratedVision.load(path)
+    assert any(word in str(exc.value) for word in ('pasta', 'JSON'))
 
 
 def test_ai_quality_requires_calibration_for_the_exact_segmentation_method():

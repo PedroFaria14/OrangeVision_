@@ -8,7 +8,7 @@ from .api import DeviceApi
 from .camera import Camera, CameraFailure
 from .camera_review import CaptureNotAuthorized
 from .camera_window import run_window
-from .config import DeviceSettings
+from .config import ConfigurationError, DeviceSettings
 from .detector import ModelFailure, OrangeDetector
 from .locking import device_lock
 from .segmentation import VisionFailure
@@ -81,6 +81,18 @@ def persist_capture(worker, grant, frame, captured_at, identity):
     return 'Foto salva localmente. Aguardando envio ao site.'
 
 
+def load_camera_calibration(settings, explicit=None):
+    path = explicit or settings.calibration_path
+    if not path:
+        return None
+    from .vision import CalibratedVision
+
+    calibration = CalibratedVision.load(path).calibration
+    if calibration.get('segmentation_method') != 'yolox-s-grabcut-v1':
+        raise ModelFailure('A calibração precisa ser validada para o método yolox-s-grabcut-v1.')
+    return calibration
+
+
 def main():
     import cv2
 
@@ -109,7 +121,11 @@ def main():
         parser.error(
             'Este modo precisa de interface gráfica e requirements-lab.txt. Use samples --loop --ai em modo sem monitor.'
         )
-    settings = DeviceSettings.load()
+    try:
+        settings = DeviceSettings.load(window=not args.headless)
+    except ConfigurationError as exc:
+        print(str(exc))
+        raise SystemExit(1) from None
     settings = replace(
         settings,
         camera_adapter='usb' if args.camera is not None else settings.camera_adapter or 'usb',
@@ -119,20 +135,18 @@ def main():
     )
     store = Store(settings.database)
     store.initialize()
+    try:
+        store.bind_device(settings.device_id, settings.api_url)
+    except ConfigurationError as exc:
+        print(str(exc))
+        raise SystemExit(1) from None
     api = DeviceApi(settings)
     camera = None
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='orangevision-upload')
     automatic = args.auto or args.headless
     calibration = None
     try:
-        if args.calibration:
-            from .vision import CalibratedVision
-
-            calibration = CalibratedVision.load(args.calibration).calibration
-            if calibration.get('segmentation_method') != 'yolox-s-grabcut-v1':
-                raise ModelFailure(
-                    'A calibração precisa ser validada para o método yolox-s-grabcut-v1.'
-                )
+        calibration = load_camera_calibration(settings, args.calibration)
         detector = OrangeDetector()
         with device_lock(settings.lock_path):
             camera = Camera(settings)
@@ -152,6 +166,7 @@ def main():
             )
     except (ModelFailure, ClockFailure, VisionFailure, CameraFailure) as exc:
         print(str(exc))
+        raise SystemExit(1) from None
     except KeyboardInterrupt:
         print('Encerrando. Fotos confirmadas localmente permanecem na fila.')
     finally:

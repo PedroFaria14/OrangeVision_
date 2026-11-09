@@ -50,3 +50,15 @@ O teste não comprova calibração/qualidade da visão computacional, acesso a i
 carga/concorrência ou deploy no Render. As unidades das métricas legadas ainda precisam ser
 confirmadas com o processamento físico. Usuários novos precisam de vínculo explícito para
 consultar dispositivos existentes.
+
+## 08/11/2026 — `007_sample_analyses.sql` e `008_dual_evaluations.sql`
+
+Aplicação autorizada explicitamente pelo responsável, no Neon configurado no ambiente da
+API (credenciais não registradas). Ambas em transação, com timeout de lock 5 s e execução 30 s.
+
+- 007: `image_samples.analysis_id`, FK para `public.analises` e índice único. Confirmada 1/1.
+- 008: `sample_evaluations`, `gemini_jobs`, `gemini_attempts`, `sample_decisions`, view
+  `effective_analyses` e métricas de `public.analises` aceitando `NULL`. Confirmadas 4/4.
+- Dados existentes preservados; nenhum resultado antigo publicado nem proprietário atribuído.
+- `python -m web_api.diagnose_dashboard` após a aplicação: `"status": "enabled"`, todos os
+  checks verdadeiros (estrutura, FK, índice, view e permissões do papel da API).

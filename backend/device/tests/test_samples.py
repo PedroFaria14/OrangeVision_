@@ -80,7 +80,7 @@ def test_lost_claim_and_result_reuse_tokens_and_payload_without_reprocessing(mon
             return {'state': payload['state']}
 
     api = Api()
-    assert process_one(api) == {'id': identity, 'state': 'awaiting_review'}
+    assert process_one(api) == {'id': identity, 'state': 'awaiting_review', 'analysis_id': None}
     assert api.claims[0] == api.claims[1]
     assert api.results[0] == api.results[1]
     assert api.downloads == 1

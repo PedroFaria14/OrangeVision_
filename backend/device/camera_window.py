@@ -2,139 +2,117 @@
 
 import time
 from datetime import UTC, datetime
-from textwrap import wrap
-from unicodedata import normalize
+from queue import Empty, SimpleQueue
 from uuid import uuid4
 
-from .api import ApiFailure, Offline
+from .camera_dashboard import DashboardStatus, action_at, failure_notice, render_frame
 from .camera_review import CameraReview, CaptureNotAuthorized, confirm_photo, connect_session
 from .detector import MODEL_NAME, ModelFailure
+from .framing import safe_framing_hint
+from .live_detection import LiveDetection
+from .sample_evaluations import poll_sample_evaluation
 from .samples import flush_camera_samples, process_one
 from .worker import ClockFailure, PairingFailure
 
 WINDOW = 'OrangeVision - captura integrada'
-
-
-def action_at(x, y, reviewing):
-    if not 555 <= y <= 605:
-        return None
-    if 8 <= x <= (220 if reviewing else 190):
-        return 'use' if reviewing else 'capture'
-    if reviewing and 235 <= x <= 470:
-        return 'retake'
-    if 500 <= x <= 810:
-        return 'connect'
-    return None
+EMPTY_DETECTION = {'status': 'not_detected', 'box': None, 'count': 0, 'inference_ms': 0.0}
+FRAMING_SECONDS = 0.3
 
 
 def error_message(error):
     if isinstance(error, (ClockFailure, ModelFailure, CaptureNotAuthorized, PairingFailure)):
         return str(error)
-    if isinstance(error, ApiFailure):
-        return f'API HTTP {error.status}. Confira servidor, credencial e autorização.'
-    if isinstance(error, Offline):
-        return 'Sem conexão. A foto salva permanece neste equipamento.'
-    return f'Operação não concluída ({type(error).__name__}). Confira a captura e a sessão.'
+    return failure_notice(error)
 
 
-def render_frame(
-    frame,
-    detection,
-    reviewing,
-    sending,
-    automatic,
-    auto_ready,
-    armed,
-    capture_notice,
-    connection_notice,
-):
-    import cv2
-    import numpy as np
+_last_audit = {}
 
-    visible = frame.copy()
-    if detection['status'] == 'detected' and detection.get('box'):
-        x, y, width, height = detection['box']
-        cv2.rectangle(visible, (x, y), (x + width, y + height), (0, 180, 0), 2)
-        label = 'Laranja'
-        (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
-        left = max(0, min(x, frame.shape[1] - tw - 12))
-        top = max(0, y - th - baseline - 10)
-        cv2.rectangle(
-            visible, (left, top), (left + tw + 12, top + th + baseline + 8), (0, 105, 0), -1
-        )
-        cv2.putText(
-            visible,
-            label,
-            (left + 6, top + th + 3),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.65,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
-    canvas = np.full((720, 960, 3), 245, np.uint8)
-    scale = min(960 / frame.shape[1], 520 / frame.shape[0])
-    image = cv2.resize(
-        visible, (max(1, int(frame.shape[1] * scale)), max(1, int(frame.shape[0] * scale)))
-    )
-    canvas[: image.shape[0], : image.shape[1]] = image
 
-    def text(message, point, scale=0.5):
-        value = normalize('NFKD', message).encode('ascii', 'ignore').decode()
-        cv2.putText(
-            canvas, value, point, cv2.FONT_HERSHEY_SIMPLEX, scale, (25, 25, 25), 1, cv2.LINE_AA
-        )
-
-    detected = detection['status'] == 'detected'
-    summary = (
-        'Foto capturada. Usar confirma; Tirar outra descarta esta foto.'
-        if reviewing
-        else (
-            'Laranja detectada pelo modelo. Pode capturar.'
-            if detected
-            else 'Aguardando laranja.'
-            if detection.get('count', 0) == 0
-            else 'Mostre uma laranja por vez.'
-        )
-    )
-    if automatic and not reviewing:
-        summary += ' Automático: ' + (
-            'pronto'
-            if auto_ready
-            else 'aguardando estabilidade'
-            if armed
-            else 'retire a fruta para liberar a próxima'
-        )
-    text(summary, (8, 541), 0.49)
-
-    def button(left, right, label, enabled, color):
-        cv2.rectangle(canvas, (left, 555), (right, 605), color if enabled else (175, 175, 175), -1)
-        cv2.putText(
-            canvas,
-            label,
-            (left + 8, 586),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (255, 255, 255),
-            1,
-            cv2.LINE_AA,
-        )
-
-    if reviewing:
-        button(8, 220, 'USAR ESTA FOTO [U]', not sending, (30, 115, 30))
-        button(235, 470, 'TIRAR OUTRA [R]', not sending, (135, 85, 35))
+def audit(stage, error=None, detail=None):
+    """Registro no terminal por etapa; repete só quando a situação muda (sem segredos)."""
+    if error is None:
+        line = detail
     else:
-        button(8, 190, 'CAPTURAR [C]', detected and not sending, (25, 120, 210))
-    button(500, 810, 'CONECTAR SESSAO [P]', not sending, (100, 70, 45))
-    for index, line in enumerate(wrap(capture_notice, 125)[:2]):
-        text(line, (8, 631 + index * 21), 0.46)
-    text('Conexão: ' + connection_notice[:130], (8, 681), 0.43)
-    text(
-        f'{"AUTOMÁTICO" if automatic else "MANUAL"} | IA: {detection["inference_ms"]:.0f} ms | Q: sair | A: alternar modo | categoria é avaliada depois',
-        (8, 706),
-        0.43,
-    )
-    return canvas
+        line = f'ERRO {type(error).__name__}: {str(error)[:200] or "-"}'
+    if line and _last_audit.get(stage) != line:
+        print(f'[{datetime.now():%H:%M:%S}] {stage}: {line}', flush=True)
+    _last_audit[stage] = line
+
+
+SESSION_CHECK_SECONDS = 15
+_last_session_check = {'at': -float('inf')}
+
+
+def observe_session(store, worker, now=None):
+    """Confirma sozinho um encerramento pedido no site, sem esperar a próxima captura.
+
+    Usa a mesma verificação da captura: se o site pediu encerramento, o equipamento
+    confirma, desativa a autorização local e passa a pedir novo pareamento [P].
+    """
+    now = time.monotonic() if now is None else now
+    if worker is None or now - _last_session_check['at'] < SESSION_CHECK_SECONDS:
+        return None
+    _last_session_check['at'] = now
+    grant = store.active_grant()
+    if not grant:
+        return None
+    try:
+        worker._capture_grant(grant)
+    except RuntimeError as error:
+        if 'encerrada' in str(error):
+            audit('sessao', detail='Encerramento pedido no site foi confirmado. Pareie de novo com [P].')
+            return 'closed'
+        audit('sessao', error)
+        return 'error'
+    except Exception as error:
+        audit('sessao', error)
+        return 'error'
+    audit('sessao', detail='ativa')
+    return 'active'
+
+
+def maintain_camera(store, api, detector, calibration, publish, worker=None):
+    """Cada fase informa seu estado; falha no heartbeat não impede tentar o upload."""
+    try:
+        api.heartbeat_samples('ready', MODEL_NAME, 'Camera integrada e fila com IA.')
+    except Exception as error:
+        audit('conexao', error)
+        publish({'kind': 'connection_error', 'error': error})
+    else:
+        publish({'kind': 'connected'})
+    observe_session(store, worker)
+    try:
+        flush_camera_samples(store, api, on_event=publish)
+    except Exception as error:
+        audit('envio', error)
+        publish({'kind': 'upload_error', 'error': error})
+    processing_id = None
+
+    def processing_event(event):
+        nonlocal processing_id
+        if event['kind'] == 'processing':
+            processing_id = event['sample_id']
+        publish(event)
+
+    try:
+        processed = process_one(
+            api, calibration, validated=calibration is not None,
+            detector=detector, on_event=processing_event, store=store,
+        )
+        audit('fila', detail=(
+            f'amostra {processed["id"][:8]} -> {processed["state"]}' if processed else 'sem amostras pendentes'
+        ))
+    except Exception as error:
+        audit('fila' if not processing_id else f'analise {processing_id[:8]}', error)
+        publish({
+            'kind': 'analysis_error' if processing_id else 'connection_error',
+            'sample_id': processing_id, 'error': error,
+        })
+    try:
+        poll_sample_evaluation(store, api)
+    except Exception as error:
+        audit('gemini', error)
+        publish({'kind': 'connection_error', 'error': error})
 
 
 def run_window(
@@ -143,33 +121,42 @@ def run_window(
     import cv2
 
     review = CameraReview(worker.store, restore=not headless)
-    capture_future = None
+    # Com localização por cor, a captura manual [C] não depende do detector COCO,
+    # que confunde laranja verde com maçã e laranja manchada com outros objetos.
+    color_fallback = bool(calibration and calibration.get('color_fallback') is True)
+    print(
+        f'Calibracao: {calibration["version"]} (localizacao por cor: {"sim" if color_fallback else "nao"})'
+        if calibration else 'Calibracao: NENHUMA carregada (confira CALIBRATION_PATH).',
+        flush=True,
+    )
+    dashboard = DashboardStatus()
+    if calibration is None:
+        dashboard.analysis_detail = 'Sem calibracao validada carregada. Use --calibration com arquivo validado.'
+    dashboard.restore(worker.store)
+    details = False
+    details_page = 0
+    events = SimpleQueue()
+    capture_future = maintenance_future = None
     capture_kind = None
-    maintenance_future = None
+    requested_sequence = None
+    request_started = 0
     capture_notice = (
-        'Foto anterior recuperada. Use ou tire outra.'
-        if review.photo
-        else 'Posicione a laranja e clique em Capturar ou pressione C.'
+        'Foto anterior recuperada. Use ou tire outra.' if review.photo else
+        'Posicione a laranja. C captura; U confirma o envio.'
     )
     connection_notice = 'Aguardando contato com o servidor.'
-    last_poll = -5.0
+    last_poll = last_refresh = -float('inf')
+    observed_sequence = 0
+    detection_error = None
     clicks = []
-
-    def maintenance():
-        api.heartbeat_samples('ready', MODEL_NAME, 'Câmera integrada e fila com IA.')
-        events = flush_camera_samples(worker.store, api)
-        result = process_one(api, calibration, validated=calibration is not None, detector=detector)
-        if 'quarantined' in events:
-            return 'Há foto retida localmente. Confira autorização/limite no terminal.'
-        if result:
-            return 'Resultado disponível no site: ' + result['state']
-        if 'synced' in events:
-            return 'Foto enviada ao site. Executor conectado.'
-        return 'Executor conectado.'
+    live = LiveDetection(detector)
+    # Dica de enquadramento: no vídeo ao vivo a cada FRAMING_SECONDS; na revisão,
+    # uma vez por foto guardada. Só orienta; a análise continua com suas recusas.
+    framing, framing_at, framing_photo = None, -float('inf'), None
 
     if not headless:
         cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(WINDOW, 960, 680)
+        cv2.resizeWindow(WINDOW, 960, 720)
 
         def mouse(event, x, y, flags, param):
             if event == cv2.EVENT_LBUTTONUP:
@@ -178,139 +165,227 @@ def run_window(
                     clicks.append(action)
 
         cv2.setMouseCallback(WINDOW, mouse)
-    print(
-        'C: capturar | U/Enter: usar foto | R: tirar outra | P: conectar sessão | A: automático | Q: sair.'
-    )
-    print('Detecção da fruta e categoria de qualidade são informações separadas.')
-    while True:
-        if capture_future is not None and capture_future.done():
-            try:
-                capture_notice = capture_future.result()
-                if capture_kind == 'review':
-                    review.submitted()
-                elif capture_kind == 'connect':
+    print('C: capturar | U/Enter: usar foto | R: tirar outra | P: sessao | I: detalhes | A: modo | Q: sair.')
+    print('Dica: fundo branco/cinza liso, luz de frente ou de cima e a fruta no centro (~1/3 da imagem).')
+    print('Detectar a fruta nao comprova qualidade. O envio exige confirmacao do servidor.')
+    live.start()
+    try:
+        while True:
+            while True:
+                try:
+                    event = events.get_nowait()
+                except Empty:
+                    break
+                dashboard.handle(event)
+                kind = event['kind']
+                if kind in ('connected', 'synced', 'result'):
+                    connection_notice = 'Servidor respondeu as ' + datetime.now().strftime('%H:%M:%S')
+                elif kind in ('connection_error', 'upload_error', 'analysis_error'):
+                    connection_notice = failure_notice(event['error'])
+                last_refresh = -float('inf')
+
+            if capture_future is not None and capture_future.done():
+                try:
+                    capture_notice = capture_future.result()
+                    if capture_kind == 'review':
+                        review.submitted()
+                        live.reset()
+                    elif capture_kind == 'connect':
+                        review.sending = False
+                    if capture_kind != 'connect':
+                        gate.captured()
+                        dashboard.upload = 'Na fila para envio. Foto salva neste equipamento.'
+                        dashboard.upload_tone = 'orange'
+                    last_poll = last_refresh = -float('inf')
+                except Exception as error:
+                    capture_notice = error_message(error)
                     review.sending = False
-                if capture_kind != 'connect':
-                    gate.captured()  # Só bloqueia automático após salvar efetivamente na outbox.
-            except Exception as error:
-                capture_notice = error_message(error)
-                review.sending = False
-                if capture_kind == 'automatic':
-                    automatic = False
-            print(capture_notice)
-            capture_future = None
-        if maintenance_future is not None and maintenance_future.done():
-            try:
-                message = maintenance_future.result()
-            except Exception as error:
-                message = error_message(error)
-            if message != connection_notice:
-                print('Conexão:', message)
-            connection_notice = message
-            maintenance_future = None
-            if (
-                not headless
-                and review.photo is None
-                and capture_future is None
-                and worker.store.camera_sample_counts().get('quarantined', 0)
-            ):
-                recovered = CameraReview(worker.store)
-                if recovered.photo:
-                    review = recovered
-                    capture_notice = 'Envio interrompido. Foto recuperada: P conecta a sessão; U confirma o envio.'
-
-        if review.photo:
-            frame = review.photo.frame
-            detection = review.photo.detection
-            captured_at = review.photo.captured_at
-            ready = False
-        else:
-            frame = camera.capture()
-            captured_at = datetime.now(UTC).isoformat()
-            detection = detector.detect(frame)
-            ready = gate.observe(detection, time.monotonic())
-        if not headless:
-            canvas = render_frame(
-                frame,
-                detection,
-                review.photo is not None,
-                review.sending,
-                automatic,
-                ready,
-                gate.armed,
-                capture_notice,
-                connection_notice,
-            )
-            cv2.imshow(WINDOW, canvas)
-        key = cv2.waitKey(20) & 0xFF if not headless else -1
-        if 65 <= key <= 90:
-            key += 32
-        if not headless and (
-            key == ord('q') or cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1
-        ):
-            break
-        action = clicks.pop(0) if clicks else None
-        if key == ord('c'):
-            action = 'capture'
-        elif key in (ord('u'), 10, 13):
-            action = 'use'
-        elif key == ord('r'):
-            action = 'retake'
-        elif key == ord('p'):
-            action = 'connect'
-        elif key == ord('a') and not review.photo:
-            automatic = not automatic
-
-        if action == 'connect' and not review.sending and capture_future is None:
-            try:
-                from .session_dialog import ask_connection_code
-
-                response = ask_connection_code(worker)
-                if response:
-                    review.sending = True
-                    capture_kind = 'connect'
-                    capture_future = pool.submit(connect_session, worker, *response)
-                    capture_notice = 'Conectando sessão. A foto guardada não será descartada…'
-            except Exception as error:
-                capture_notice = error_message(error)
-        elif action == 'capture' and review.sending:
-            capture_notice = 'Conectando sessão. Aguarde concluir antes de capturar.'
-        elif action == 'capture' and not review.photo:
-            try:
-                if review.take(frame, detection, captured_at, worker.store.active_grant()):
-                    capture_notice = (
-                        'Foto capturada e salva. Escolha Usar esta foto ou Tirar outra.'
-                    )
-                else:
-                    capture_notice = 'Aguardando detecção de uma laranja para capturar.'
-            except Exception as error:
-                capture_notice = (
-                    f'Não foi possível salvar a captura ({type(error).__name__}). Tente novamente.'
-                )
-            print(capture_notice)
-        elif action == 'retake' and review.photo and not review.sending:
-            review.retake()
-            capture_notice = 'Mostre a laranja e capture novamente.'
-        elif action == 'use' and review.photo and not review.sending and capture_future is None:
-            review.sending = True
-            capture_kind = 'review'
-            # Pode aguardar uma consulta em andamento, mas nunca descarta o pedido de confirmação.
-            capture_future = pool.submit(confirm_photo, worker, review.photo)
-            capture_notice = 'Foto salva. Confirmando autorização para enviar…'
-        elif automatic and ready and review.photo is None and capture_future is None:
-            grant = worker.store.active_grant()
-            if not grant:
-                automatic = False
-                capture_notice = 'Automático pausado: pareie uma sessão antes de enviar fotos.'
+                    if capture_kind != 'connect':
+                        dashboard.upload = 'Confirmacao falhou. Foto preservada: ' + capture_notice
+                        dashboard.upload_tone = 'red'
+                    if capture_kind == 'automatic':
+                        automatic = False
                 print(capture_notice)
-            else:
-                capture_kind = 'automatic'
-                capture_future = pool.submit(
-                    save_automatic, worker, grant, frame.copy(), captured_at, str(uuid4())
-                )
-                capture_notice = 'Salvando captura automática autorizada…'
+                capture_future = None
+            if maintenance_future is not None and maintenance_future.done():
+                try:
+                    maintenance_future.result()
+                except Exception as error:
+                    connection_notice = error_message(error)
+                maintenance_future = None
+                if (
+                    not headless and review.photo is None and capture_future is None
+                    and worker.store.camera_sample_counts().get('quarantined', 0)
+                ):
+                    recovered = CameraReview(worker.store)
+                    if recovered.photo:
+                        review = recovered
+                        requested_sequence = None
+                        live.reset()
+                        capture_notice = 'Envio retido. Foto recuperada: P verifica sessao; U confirma.'
 
-        now = time.monotonic()
-        if maintenance_future is None and capture_future is None and now - last_poll >= 5:
-            maintenance_future = pool.submit(maintenance)
-            last_poll = now
+            now = time.monotonic()
+            if now - last_refresh >= 1:
+                dashboard.refresh(worker.store, getattr(worker, 'device_id', None))
+                last_refresh = now
+                if dashboard.counts.get('pending') and dashboard.upload_tone == 'muted':
+                    dashboard.upload = 'Fotos salvas aguardando envio.'
+                    dashboard.upload_tone = 'orange'
+
+            ready = False
+            snapshot = None
+            if review.photo:
+                frame, detection = review.photo.frame, review.photo.detection
+            else:
+                frame = camera.capture()
+                sequence = live.submit(frame, datetime.now(UTC).isoformat(), time.monotonic())
+                snapshot, error = live.latest()
+                if error is not None and error is not detection_error:
+                    capture_notice = 'Falha na IA: ' + error_message(error)
+                    print(capture_notice)
+                detection_error = error
+                if snapshot is not None and snapshot.fresh(time.monotonic()):
+                    detection = snapshot.detection
+                    if snapshot.sequence != observed_sequence:
+                        observed_sequence = snapshot.sequence
+                        ready = gate.observe(detection, snapshot.captured_monotonic)
+                else:
+                    snapshot = None
+                    detection = EMPTY_DETECTION
+                    gate.observe({'status': 'unavailable'}, time.monotonic())
+
+                # Manual capture waits for a NEW analyzed frame and saves that exact frame.
+                if requested_sequence is not None:
+                    if snapshot is not None and snapshot.sequence >= requested_sequence:
+                        try:
+                            if review.take(
+                                snapshot.frame, snapshot.detection, snapshot.captured_at,
+                                worker.store.active_grant(),
+                                allow_undetected=color_fallback,
+                            ):
+                                capture_notice = 'Foto guardada. Clique USAR FOTO [U] para autorizar o envio.'
+                                dashboard.upload = 'Aguardando sua confirmacao em USAR FOTO [U].'
+                                dashboard.upload_tone = 'orange'
+                                frame, detection = review.photo.frame, review.photo.detection
+                                live.reset()
+                            else:
+                                capture_notice = 'Nenhuma laranja unica detectada. Reposicione e pressione C.'
+                        except Exception as error:
+                            capture_notice = error_message(error)
+                        requested_sequence = None
+                        ready = False
+                        print(capture_notice)
+                    elif time.monotonic() - request_started > 15:
+                        requested_sequence = None
+                        capture_notice = 'IA sem resultado recente. Confira o erro e tente capturar novamente.'
+
+            if not headless:
+                if review.photo is not None:
+                    if framing_photo is not review.photo:
+                        framing = safe_framing_hint(review.photo.frame, calibration)
+                        framing_photo = review.photo
+                elif framing_photo is not None or time.monotonic() - framing_at >= FRAMING_SECONDS:
+                    framing = safe_framing_hint(frame, calibration)
+                    framing_at, framing_photo = time.monotonic(), None
+                canvas = render_frame(
+                    frame, detection, review.photo is not None, review.sending,
+                    automatic, ready, gate.armed, capture_notice, connection_notice,
+                    dashboard=dashboard, details=details, details_page=details_page,
+                    framing=framing,
+                )
+                cv2.imshow(WINDOW, canvas)
+                key = cv2.waitKey(20) & 0xFF
+                try:
+                    visible = cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) >= 1
+                except cv2.error:
+                    visible = False
+                if key in (ord('q'), ord('Q')) or not visible:
+                    break
+            else:
+                time.sleep(0.02)
+                key = -1
+            if 65 <= key <= 90:
+                key += 32
+            action = clicks.pop(0) if clicks else None
+            action = {
+                ord('c'): 'capture', ord('u'): 'use', 10: 'use', 13: 'use',
+                ord('r'): 'retake', ord('p'): 'connect', ord('a'): 'mode',
+                ord('i'): 'details',
+                ord('['): 'previous_details', ord(']'): 'next_details',
+            }.get(key, action)
+
+            if action == 'details':
+                details = not details
+                details_page = 0
+            elif details and action in ('previous_details', 'next_details'):
+                details_page += -1 if action == 'previous_details' else 1
+            elif action == 'mode' and not review.photo and not review.sending:
+                automatic = not automatic
+                requested_sequence = None
+                live.reset()
+                gate.observe({'status': 'unavailable'}, time.monotonic())
+                capture_notice = 'Modo automatico ativado.' if automatic else 'Modo manual ativado.'
+            elif action == 'connect' and not review.sending and capture_future is None:
+                try:
+                    from .session_dialog import ask_connection_code
+
+                    requested_sequence = None
+                    response = ask_connection_code(worker)
+                    live.reset()
+                    gate.observe({'status': 'unavailable'}, time.monotonic())
+                    if response:
+                        review.sending = True
+                        capture_kind = 'connect'
+                        capture_future = pool.submit(connect_session, worker, *response)
+                        capture_notice = 'Conectando sessao. Foto guardada nao sera descartada.'
+                    last_refresh = -float('inf')
+                except Exception as error:
+                    capture_notice = error_message(error)
+            elif action == 'capture' and review.sending:
+                capture_notice = 'Operacao em andamento. Aguarde antes de capturar.'
+            elif action == 'capture' and not review.photo:
+                if requested_sequence is None:
+                    requested_sequence = sequence + 1
+                    request_started = time.monotonic()
+                capture_notice = 'Validando um novo quadro com a IA. Aguarde a foto para confirmar.'
+            elif action == 'retake' and review.photo and not review.sending:
+                review.retake()
+                live.reset()
+                gate.observe({'status': 'unavailable'}, time.monotonic())
+                capture_notice = 'Mostre a laranja e capture novamente.'
+                dashboard.upload = 'Foto de revisao descartada. Envios anteriores preservados.'
+                dashboard.upload_tone = 'muted'
+            elif action == 'use' and review.photo and not review.sending and capture_future is None:
+                review.sending = True
+                capture_kind = 'review'
+                capture_future = pool.submit(confirm_photo, worker, review.photo)
+                capture_notice = 'Foto salva. Confirmando autorizacao para enviar...'
+                dashboard.upload = 'Confirmando autorizacao (ainda nao enviada).'
+                dashboard.upload_tone = 'orange'
+            elif (
+                automatic and ready and snapshot is not None and review.photo is None
+                and requested_sequence is None and capture_future is None
+            ):
+                grant = worker.store.active_grant()
+                if not grant:
+                    automatic = False
+                    capture_notice = 'Automatico pausado: pareie uma sessao antes de enviar fotos.'
+                else:
+                    capture_kind = 'automatic'
+                    capture_future = pool.submit(
+                        save_automatic, worker, grant, snapshot.frame.copy(),
+                        snapshot.captured_at, str(uuid4()),
+                    )
+                    capture_notice = 'Salvando captura automatica autorizada...'
+                    dashboard.upload = 'Salvando foto localmente (ainda nao enviada).'
+                    dashboard.upload_tone = 'orange'
+
+            now = time.monotonic()
+            if maintenance_future is None and capture_future is None and now - last_poll >= 5:
+                maintenance_future = pool.submit(
+                    maintain_camera, worker.store, api, detector, calibration, events.put,
+                    worker,
+                )
+                last_poll = now
+    finally:
+        live.close()

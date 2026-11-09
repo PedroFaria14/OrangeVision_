@@ -97,9 +97,15 @@ para fazer rollback: para interromper a operação, desativar a flag e preservar
 
 ### 4.2 Provisionar o equipamento e o usuário autorizado
 
-Usar `web_api.provision_device`, ferramenta administrativa local — não existe cadastro
-público de hardware. Sem `--apply` ela apenas mostra o plano. É possível provisionar
-com o recurso ainda desligado, desde que a migration 002 já esteja aplicada.
+Para equipamentos novos, a conta normal pode usar **Equipamentos** no site após
+ativação da migration 006. Consulte [Cadastro_Equipamentos.md](Cadastro_Equipamentos.md)
+para emissão, configuração do Pi e rotação. Esse cadastro não assume dispositivos
+existentes nem libera acesso a outras contas.
+
+O fluxo administrativo `web_api.provision_device` continua disponível para
+provisionamento e vínculos explícitos. Sem `--apply` ele apenas mostra o plano.
+É possível provisionar com inspeções ainda desligadas, desde que a migration 002
+já esteja aplicada.
 
 ```powershell
 python -m web_api.provision_device
@@ -142,6 +148,7 @@ configuração e só então mostra o item **Inspeções**.
 | GET `/api/device/inspections/:id`         | Equipamento + autorização de inspeção | Estado observado da autorização, não da câmera                        |
 | POST `/api/device/inspections/:id/closed` | Equipamento + autorização             | Confirmar encerramento após captura em andamento                      |
 | POST `/api/ingest/analyses`               | Equipamento + autorização             | Enviar lote e receber ACKs depois do commit                           |
+| GET `/api/device/samples/:id/evaluations` | Equipamento + autorização de origem   | Ler avaliações da captura; ver `Avaliacoes_Local_Gemini.md`, seção 9.1 |
 
 POSTs do site exigem `Origin` permitido e `X-CSRF-Token`. O dispositivo usa
 `Authorization: Bearer` e `X-Inspection-Lease`, sem autenticar por cookie de usuário.

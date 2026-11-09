@@ -15,6 +15,26 @@ class Offline(Exception):
     pass
 
 
+def connection_guidance(error):
+    if isinstance(error, Offline):
+        return 'Falha de rede. Sem comunicação com a API. Configuração e fotos locais preservadas.'
+    if isinstance(error, ApiFailure):
+        if error.status == 401:
+            return (
+                'Credencial recusada (HTTP 401). Após rotação no site, execute '
+                'python -m device update-credential e reinicie o executor. Não recadastre o equipamento.'
+            )
+        if error.status == 403:
+            return 'Permissão recusada (HTTP 403). Confira o vínculo do equipamento e a autorização da sessão.'
+        if error.status >= 500:
+            return f'API indisponível (HTTP {error.status}). Tente novamente; configuração preservada.'
+        return f'API HTTP {error.status}. Confira o endereço e as permissões da operação.'
+    if isinstance(error, RuntimeError) and str(error):
+        # Mensagens próprias do equipamento (trava, reserva, contrato): sem segredos.
+        return f'{str(error)[:160]} Configuração e fotos locais preservadas.'
+    return f'Falha ({type(error).__name__}). Configuração e fotos locais preservadas.'
+
+
 class DeviceApi:
     def __init__(self, settings):
         self.base = settings.api_url
@@ -187,6 +207,16 @@ class DeviceApi:
                 return bytes(data)
         except (requests.ConnectionError, requests.Timeout) as exc:
             raise Offline('Sem comunicação com a API.') from exc
+
+    def sample_evaluations(self, identity, lease):
+        from uuid import UUID
+
+        return self._request(
+            'GET',
+            f'/api/device/samples/{UUID(identity)}/evaluations',
+            lease=lease,
+            timeout=(3, 8),
+        )
 
     def finish_sample(self, identity, lease, payload):
         from uuid import UUID

@@ -14,6 +14,26 @@ class SampleService:
     def ready(self):
         return self.repository.ready()
 
+    def dashboard_ready(self):
+        return self.repository.dashboard_ready()
+
+    def configuration(self):
+        status = self.repository.dashboard_status()
+        return {'enabled': self.ready(), 'dashboard_enabled': status == 'enabled',
+                'dashboard_status': status, **self.repository.evaluation_config()}
+
+    def request_gemini(self, owner, identity, request_id):
+        self.require_ready()
+        return self.repository.request_gemini(owner, identity, request_id)
+
+    def decide(self, owner, identity, command):
+        self.require_ready()
+        return self.repository.decide(owner, identity, command)
+
+    def publish(self, owner, identity):
+        self.require_ready()
+        return self.repository.publish(owner, identity)
+
     def require_ready(self):
         if not self.ready():
             raise ApplicationError(503, 'Amostras ainda não ativadas neste ambiente.')
@@ -121,6 +141,9 @@ class SampleService:
 
     def device_image(self, device, identity, lease):
         return self.repository.device_image(device, identity, digest(lease))
+
+    def device_evaluations(self, device, identity, lease):
+        return self.repository.device_evaluations(device, identity, digest(lease))
 
     def finish(self, device, identity, lease, result):
         payload = result.model_dump(mode='json')

@@ -9,7 +9,9 @@ def adapt(row):
         'device_id': row['dispositivo_id'],
         'timestamp': row['data_hora'],
         'classification': row['classificacao'],
-        'calibration_version': row.get('calibration_version') or row['versao_algoritmo'],
+        'evaluation_source': row.get('evaluation_source'),
+        'decision_revision': row.get('decision_revision', 0),
+        'calibration_version': row.get('calibration_version') if row.get('evaluation_source') in ('gemini', 'human') else row.get('calibration_version') or row['versao_algoritmo'],
         'inspection_session_id': row.get('inspection_session_id'),
         'classification_reason': row.get('classification_reason'),
         'metrics': {

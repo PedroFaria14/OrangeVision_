@@ -1,0 +1,32 @@
+# Credenciais e arquivos privados, mesmo que o .gitignore seja alterado.
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Dependências, builds e saídas de ferramentas.
+.git/
+.opencode/
+node_modules/
+**/node_modules/
+.venv*/
+**/.venv*/
+__pycache__/
+**/__pycache__/
+dist/
+**/dist/
+graphify-out/
+test-results*/
+**/test-results*/
+playwright-report/
+**/playwright-report/
+calibracao-local/
+backend/
+.next/
+**/.next/
+.vercel/
+**/.vercel/

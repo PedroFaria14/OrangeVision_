@@ -7,12 +7,15 @@ from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials
 
 from ..application.sample_service import SampleService
+from ..contracts import HttpErrorResponse
+from ..evaluation_contracts import DecisionRequest, GeminiRequest
 from ..infrastructure.sample_images import SampleImages
 from ..infrastructure.sample_repository import SampleRepository
 from ..inspection_contracts import DeviceOption
 from ..sample_contracts import (
     AuthorizePhotoReview,
     ClaimSample,
+    DeviceSampleEvaluations,
     ExecutorAcknowledgement,
     ExecutorHeartbeat,
     ImageSample,
@@ -103,7 +106,7 @@ def device_capture(
 
 @router.get('/api/samples/config', response_model=SamplesConfig)
 def sample_config(session: CurrentSession, service: Samples):
-    return {'enabled': service.ready(), 'processing': 'device', 'max_upload_bytes': 5242880}
+    return {**service.configuration(), 'processing': 'device', 'max_upload_bytes': 5242880}
 
 
 @router.get('/api/samples/devices', response_model=list[DeviceOption])
@@ -178,9 +181,31 @@ def queue_sample(
     return service.queue(session['user']['id'], sample_id, payload.device_id)
 
 
+@router.post('/api/samples/{sample_id}/analysis', response_model=ImageSample,
+             description='Registra uma captura concluída da própria conta no dashboard. Idempotente por amostra; requer migration 007 e inspeções ativas.')
+def publish_sample(sample_id: UUID, request: Request, session: CurrentSession, service: Samples):
+    check_origin(request)
+    check_csrf(request, session)
+    return service.publish(session['user']['id'], sample_id)
+
+
 @router.post('/api/device/samples/claim', response_model=ImageSample | None)
 def claim_sample(payload: ClaimSample, device: SampleDevice, service: Samples):
     return service.claim(device, payload.claim_id, payload.lease_token.get_secret_value())
+
+
+@router.post('/api/samples/{sample_id}/evaluations/gemini', response_model=ImageSample, status_code=202)
+def request_gemini(sample_id: UUID, payload: GeminiRequest, request: Request, session: CurrentSession, service: Samples):
+    check_origin(request)
+    check_csrf(request, session)
+    return service.request_gemini(session['user']['id'], sample_id, payload.request_id)
+
+
+@router.post('/api/samples/{sample_id}/decisions', response_model=ImageSample)
+def decide_sample(sample_id: UUID, payload: DecisionRequest, request: Request, session: CurrentSession, service: Samples):
+    check_origin(request)
+    check_csrf(request, session)
+    return service.decide(session['user']['id'], sample_id, payload)
 
 
 @router.get(
@@ -197,6 +222,25 @@ def device_sample_image(
     sample_id: UUID, device: SampleDevice, lease: SampleLease, service: Samples
 ):
     return Response(service.device_image(device, sample_id, lease), media_type='image/jpeg')
+
+
+@router.get(
+    '/api/device/samples/{sample_id}/evaluations',
+    response_model=DeviceSampleEvaluations,
+    description='Consulta somente leitura das avaliações de uma captura do próprio equipamento. '
+    'Exige a lease da sessão de origem, vale até uma hora após o encerramento ou expiração, '
+    'não agenda Gemini, não consome a fila e não altera resultados.',
+    responses={
+        403: {'description': 'Vínculo da conta com o equipamento removido.', 'model': HttpErrorResponse},
+        404: {'description': 'Amostra inexistente, de outro equipamento, sem sessão ou com lease incorreta.', 'model': HttpErrorResponse},
+        410: {'description': 'Prazo de consulta encerrado; o resultado continua no site.', 'model': HttpErrorResponse},
+        503: {'description': 'Banco indisponível, migration 008 ausente ou inspeções desativadas.', 'model': HttpErrorResponse},
+    },
+)
+def device_sample_evaluations(
+    sample_id: UUID, device: SampleDevice, lease: InspectionLease, service: Samples
+):
+    return service.device_evaluations(device, sample_id, lease)
 
 
 @router.post('/api/device/samples/{sample_id}/result', response_model=ImageSample)

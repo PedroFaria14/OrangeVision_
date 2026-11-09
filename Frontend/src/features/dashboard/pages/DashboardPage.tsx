@@ -1,77 +1,109 @@
-import { Link } from 'react-router-dom';
-import { Page, QueryFeedback } from '@/shared/ui/Page';
-import { formatDate, formatRatio } from '@/shared/lib/format';
-import { useInspectionConfig } from '@/features/inspection/hooks/useInspectionConfig';
+import { Alert, Box, Button, Stack, Typography } from '@mui/material';
+import { Page } from '@/shared/ui/Page';
+import { formatDate } from '@/shared/lib/format';
 import { apiEnabled, useDashboard } from '../hooks/useAnalyses';
+import { FilterBar } from '../components/FilterBar';
+import { MetricCards } from '../components/MetricCards';
+import { DistributionChart, TimelineChart } from '../components/AnalysisCharts';
+import { AnalysesTable } from '../components/AnalysesTable';
+import { QueryFeedback } from '../components/QueryFeedback';
 import {
   useDashboardFilters,
   useValidHistoryPage,
 } from '../hooks/useDashboardFilters';
-import { FilterBar } from '../components/FilterBar';
-import { AnalysesTable } from '../components/AnalysesTable';
-import { ComparisonTable } from '../components/ComparisonTable';
-import { TableRegion } from '@/shared/ui/TableRegion';
-import styles from '@/shared/ui/dashboard.module.css';
-
+import { Icon } from '@/shared/ui/Icon';
+import { PeriodComparison } from '../components/PeriodComparison';
+import { useSession } from '@/features/auth/hooks/useSession';
+import { previousCalendarDay } from '../model/period';
+import { useInspectionConfig } from '@/features/inspection/hooks/useInspectionConfig';
 export default function DashboardPage({
   historyOnly = false,
 }: {
   historyOnly?: boolean;
 }) {
   const view = useDashboardFilters(historyOnly);
+  const { session } = useSession();
+  const inspectionConfig = useInspectionConfig();
+  const firstName = session?.user.name.trim().split(/\s+/)[0];
   const { filters, offset } = view;
   const { analyses, summary, series, comparison } = useDashboard(
     offset,
     filters,
     !historyOnly,
   );
-  const inspection = useInspectionConfig();
   useValidHistoryPage(analyses.data?.total, offset);
-  const refresh = () => {
-    void analyses.refetch();
-    if (!historyOnly) {
-      void comparison.refetch();
-      void series.refetch();
-    }
-  };
-
-  const summaryData = summary.data;
-
+  const refresh = (
+    <Button
+      variant="outlined"
+      startIcon={<Icon name="refresh" sx={{ fontSize: 17 }} />}
+      disabled={
+        !apiEnabled ||
+        analyses.isFetching ||
+        summary.isFetching ||
+        series.isFetching ||
+        comparison.isFetching
+      }
+      onClick={() => {
+        void analyses.refetch();
+        if (!historyOnly) {
+          void summary.refetch();
+          void series.refetch();
+        }
+      }}
+    >
+      Atualizar consultas
+    </Button>
+  );
   return (
     <Page
-      title={historyOnly ? 'Histórico de análises' : 'Dashboard'}
-      description={'Dados autorizados da sua conta.'}
+      title={
+        historyOnly
+          ? 'Análises'
+          : firstName
+            ? `Bem-vindo, ${firstName}!`
+            : 'Bem-vindo!'
+      }
+      description={
+        historyOnly
+          ? 'Consulte e explore os registros de triagem autorizados.'
+          : 'Acompanhe suas análises e os resultados da triagem.'
+      }
+      eyebrow={historyOnly ? 'REGISTROS DE TRIAGEM' : 'VISÃO GERAL'}
+      action={refresh}
     >
-      <button
-        onClick={refresh}
-        disabled={
-          !apiEnabled ||
-          analyses.isFetching ||
-          (!historyOnly && (comparison.isFetching || series.isFetching))
-        }
-      >
-        Atualizar consultas
-      </button>
       {!view.valid && (
-        <p role="alert">
+        <Alert severity="warning">
           Período da URL inválido. Exibindo os últimos 30 dias; aplique os
-          filtros para corrigir.
-        </p>
+          filtros para corrigir a URL.
+        </Alert>
       )}
       <FilterBar
         key={`${filters.start}|${filters.end}|${filters.classification}`}
         filters={filters}
         apply={view.apply}
       />
-      {historyOnly && inspection.data && (
-        <p>
-          {inspection.data.ownership === 'inspection-session'
-            ? 'Modo por sessão: somente análises das suas sessões. Registros antigos sem sessão não recebem proprietário automaticamente.'
-            : 'Modo legado: registros sem sessão de equipamentos autorizados. Registros pessoais não são expostos neste modo.'}
-        </p>
+      {historyOnly && inspectionConfig.data && (
+        <Alert severity="info">
+          {inspectionConfig.data.ownership === 'inspection-session'
+            ? 'Modo por sessão: este histórico mostra análises pertencentes às suas sessões de inspeção. Registros antigos sem sessão não são atribuídos automaticamente à sua conta.'
+            : 'Modo legado: este histórico mostra registros sem sessão dos equipamentos autorizados para sua conta. Análises pessoais vinculadas a sessões não são expostas por esse modo.'}
+        </Alert>
       )}
+      <Typography
+        sx={{ color: 'text.secondary', fontSize: 12, mt: '8px !important' }}
+      >
+        Período: {formatDate(filters.start).split(',')[0]} até{' '}
+        {previousCalendarDay(filters.end).split('-').reverse().join('/')} ·
+        horário de Brasília.{' '}
+        {filters.classification
+          ? `Classe: ${filters.classification}.`
+          : 'Todas as classes.'}
+      </Typography>
       {!apiEnabled ? (
-        <p role="alert">Integração desativada. Nenhuma simulação é exibida.</p>
+        <Alert severity="warning">
+          Integração desativada na configuração pública. Nenhuma simulação é
+          exibida.
+        </Alert>
       ) : (
         <>
           {!historyOnly && (
@@ -79,194 +111,131 @@ export default function DashboardPage({
               <QueryFeedback
                 pending={summary.isPending}
                 error={summary.error}
+                stale={!!summary.data}
                 retry={() => void summary.refetch()}
               />
               {summary.data && (
-                <section>
-                  <h2>Indicadores do período</h2>
-                  <dl className={styles.metrics}>
-                    <div className={styles.metric}>
-                      <dt>Total analisado</dt>
-                      <dd>{summary.data.total}</dd>
-                    </div>
-                    <div className={`${styles.metric} ${styles.approved}`}>
-                      <dt>Aprovadas</dt>
-                      <dd>{summary.data.approved}</dd>
-                      <dd className={styles.metricShare}>
-                        {formatRatio(
-                          summary.data.total > 0
-                            ? summary.data.approved / summary.data.total
-                            : null,
-                        )}{' '}
-                        do total
-                      </dd>
-                    </div>
-                    <div className={`${styles.metric} ${styles.attention}`}>
-                      <dt>Atenção</dt>
-                      <dd>{summary.data.attention}</dd>
-                      <dd className={styles.metricShare}>
-                        {formatRatio(
-                          summary.data.total > 0
-                            ? summary.data.attention / summary.data.total
-                            : null,
-                        )}{' '}
-                        do total
-                      </dd>
-                    </div>
-                    <div className={`${styles.metric} ${styles.review}`}>
-                      <dt>Revisar</dt>
-                      <dd>{summary.data.review}</dd>
-                      <dd className={styles.metricShare}>
-                        {formatRatio(
-                          summary.data.total > 0
-                            ? summary.data.review / summary.data.total
-                            : null,
-                        )}{' '}
-                        do total
-                      </dd>
-                    </div>
-                  </dl>
-                  <dl className={styles.metadata}>
-                    <div>
-                      <dt>Taxa de aprovação</dt>
-                      <dd>{formatRatio(summary.data.approval_rate)}</dd>
-                    </div>
-                    <div>
-                      <dt>Última análise</dt>
-                      <dd>{formatDate(summary.data.latest_analysis_at)}</dd>
-                    </div>
-                  </dl>
-                </section>
-              )}
-
-              {summaryData && summaryData.total > 0 && (
-                <section>
-                  <h2>Distribuição das classificações</h2>
-                  <p>
-                    Participação de cada categoria no período e nos filtros
-                    selecionados.
-                  </p>
-
-                  <div className={styles.distribution}>
-                    {[
-                      {
-                        label: 'Aprovadas',
-                        count: summaryData.approved,
-                        color: styles.approvedBar,
-                      },
-                      {
-                        label: 'Atenção',
-                        count: summaryData.attention,
-                        color: styles.attentionBar,
-                      },
-                      {
-                        label: 'Revisar',
-                        count: summaryData.review,
-                        color: styles.reviewBar,
-                      },
-                    ].map(({ label, count, color }) => (
-                      <div className={styles.distributionRow} key={label}>
-                        <div className={styles.distributionLabel}>
-                          <span>{label}</span>
-                          <strong>
-                            {count} · {formatRatio(count / summaryData.total)}
-                          </strong>
-                        </div>
-
-                        <meter
-                          className={`${styles.distributionMeter} ${color}`}
-                          min={0}
-                          max={summaryData.total}
-                          value={count}
-                          aria-label={label}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {comparison.data && <ComparisonTable data={comparison.data} />}
-              <QueryFeedback
-                pending={series.isPending}
-                error={series.error}
-                retry={() => void series.refetch()}
-              />
-              {series.data && (
-                <section>
-                  <h2>Evolução diária das análises</h2>
-                  <p>
-                    Horário de Brasília. Apenas dias observados; dia ausente não
-                    significa zero confirmado.
-                  </p>
-                  {series.data.items.length === 0 ? (
-                    <p>Nenhuma análise observada no período.</p>
-                  ) : (
-                    <TableRegion label="Rolagem da evolução diária">
-                      <table>
-                        <caption>Evolução diária das análises</caption>
-                        <thead>
-                          <tr>
-                            {['Data', 'Aprovada', 'Atenção', 'Revisar'].map(
-                              (label) => (
-                                <th scope="col" key={label}>
-                                  {label}
-                                </th>
-                              ),
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {series.data.items.map((item) => (
-                            <tr key={item.start}>
-                              <td>{formatDate(item.start).split(',')[0]}</td>
-                              <td>{item.approved}</td>
-                              <td>{item.attention}</td>
-                              <td>{item.review}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </TableRegion>
+                <>
+                  {comparison.data?.current.in_progress && (
+                    <Typography variant="caption" color="text.secondary">
+                      Período atual em andamento · valores parciais até{' '}
+                      {formatDate(comparison.data.current.observed_end)}.
+                    </Typography>
                   )}
-                </section>
+                  <MetricCards
+                    data={summary.data}
+                    comparison={comparison.data}
+                  />
+                </>
               )}
-            </>
-          )}
-          <QueryFeedback
-            pending={analyses.isPending}
-            error={analyses.error}
-            retry={() => void analyses.refetch()}
-          />
-          {analyses.data && (
-            <>
-              <AnalysesTable
-                items={analyses.data.items}
-                total={analyses.data.total}
-                offset={offset}
-                busy={analyses.isFetching}
-                changePage={view.changePage}
-                compact={!historyOnly}
-              />
-              <p>Histórico consultado: {formatDate(analyses.data.as_of)}.</p>
             </>
           )}
           {!historyOnly && (
-            <p>
-              <Link to={`/dashboard/historico${window.location.search}`}>
-                Ver histórico completo
-              </Link>
-            </p>
+            <Stack spacing={2}>
+              <Box sx={{ pt: 1 }}>
+                <Typography
+                  component="h2"
+                  sx={{ fontSize: 18, fontWeight: 650, mb: 0.5 }}
+                >
+                  Estatísticas do período
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Distribuição e evolução das análises no mesmo recorte.
+                </Typography>
+              </Box>
+              <QueryFeedback
+                pending={series.isPending}
+                error={series.error}
+                stale={!!series.data}
+                retry={() => void series.refetch()}
+              />
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: 'minmax(0,1fr)',
+                    lg: 'minmax(0,1fr) minmax(0,1.3fr)',
+                  },
+                  gap: 2.5,
+                  alignItems: 'start',
+                }}
+              >
+                {summary.data && <DistributionChart data={summary.data} />}{' '}
+                {series.data && <TimelineChart data={series.data} />}
+              </Box>
+            </Stack>
           )}
-          {!historyOnly && summary.data && (
-            <p>Resumo consultado: {formatDate(summary.data.as_of)}.</p>
+          {!historyOnly && comparison.data && (
+            <PeriodComparison data={comparison.data} />
+          )}
+          <Box>
+            <QueryFeedback
+              pending={analyses.isPending}
+              error={analyses.error}
+              stale={!!analyses.data}
+              retry={() => void analyses.refetch()}
+            />
+            {analyses.data && (
+              <Stack spacing={2}>
+                <AnalysesTable
+                  items={analyses.data.items}
+                  total={analyses.data.total}
+                  offset={offset}
+                  busy={analyses.isFetching}
+                  changePage={view.changePage}
+                  compact={!historyOnly}
+                />
+              </Stack>
+            )}
+          </Box>
+          {(analyses.data || (!historyOnly && summary.data)) && (
+            <Box component="aside" aria-label="Atualização das consultas">
+              {analyses.data && (
+                <Typography
+                  variant="caption"
+                  component="p"
+                  color="text.secondary"
+                >
+                  Histórico consultado: {formatDate(analyses.data.as_of)}.
+                </Typography>
+              )}
+              {!historyOnly && summary.data && (
+                <Typography
+                  variant="caption"
+                  component="p"
+                  color="text.secondary"
+                >
+                  Resumo consultado: {formatDate(summary.data.as_of)}.
+                </Typography>
+              )}
+              <Typography variant="caption" color="text.secondary">
+                Consultas independentes podem ter horários diferentes. Esses
+                horários não indicam a última sincronização do equipamento.
+              </Typography>
+            </Box>
           )}
         </>
       )}
-      <p>
-        Horário de consulta não é horário de sincronização. Inspeção
-        experimental: falhas de aquisição não são classificadas como Revisar.
-      </p>
+      <Stack
+        direction="row"
+        sx={{
+          gap: 1,
+          alignItems: 'flex-start',
+          pt: 1,
+          borderTop: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Icon
+          name="info"
+          sx={{ fontSize: 15, color: 'text.secondary', mt: 0.2 }}
+        />
+        <Typography variant="caption" color="text.secondary">
+          Inspeção visual experimental. Taxa de aprovação não é acurácia; falhas
+          de aquisição não são classificadas como Revisar. Informações remotas
+          não indicam câmera ao vivo.
+        </Typography>
+      </Stack>
     </Page>
   );
 }

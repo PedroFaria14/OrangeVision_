@@ -106,7 +106,7 @@ test('proxy local: cookie de produção, origem, CSRF e isolamento de cookies', 
         headers,
         body: '{}',
       });
-      assert.equal(response.status, 403);
+      assert.equal(response.status, 403, JSON.stringify(headers));
       await response.text();
     }
     assert.equal(requests.length, before);

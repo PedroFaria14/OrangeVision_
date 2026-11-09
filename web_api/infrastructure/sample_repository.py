@@ -1,16 +1,33 @@
+import logging
 import secrets
 from datetime import timedelta
 from uuid import uuid4
 
 from psycopg.types.json import Jsonb
+from pydantic import ValidationError
 
 from ..application.errors import ApplicationError
-from ..application.inspection_service import capture_within_authorization
+from ..application.inspection_service import (
+    capture_within_authorization,
+    evaluation_access_deadline,
+    payload_digest,
+)
 from ..database import connection
+from ..sample_contracts import SampleResult
+from .dashboard_readiness import inspect_dashboard
+from .evaluation_repository import (
+    EvaluationRepository,
+    describe_evaluations,
+    evaluations_ready,
+    record_local,
+)
+
+log = logging.getLogger('orangevision.web')
 
 COLUMNS = """s.id,s.filename,s.width,s.height,s.state,s.device_id,s.metrics,s.classification,
 s.reason,s.calibration_version,s.algorithm_version,s.created_at,s.updated_at,
-s.started_at,s.finished_at,s.claim_expires_at,s.detection,s.source_inspection_id,s.captured_at,s.review_authorization_id,(s.mask_data IS NOT NULL) AS has_mask"""
+s.started_at,s.finished_at,s.claim_expires_at,s.detection,s.source_inspection_id,s.captured_at,s.review_authorization_id,
+{analysis_id} AS analysis_id,(s.mask_data IS NOT NULL) AS has_mask"""
 
 
 def public_sample(row):
@@ -29,6 +46,112 @@ class SampleRepository:
             return db.execute(
                 "SELECT to_regclass('orangevision_web.image_samples') IS NOT NULL AND to_regclass('orangevision_web.sample_executors') IS NOT NULL AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='orangevision_web' AND table_name='image_samples' AND column_name='review_authorization_id') AS ready"
             ).fetchone()['ready']
+
+    @staticmethod
+    def _analysis_column(db):
+        ready = db.execute(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='orangevision_web' AND table_name='image_samples' AND column_name='analysis_id') AS ready"
+        ).fetchone()['ready']
+        return 's.analysis_id' if ready else 'NULL::uuid'
+
+    def _dashboard_ready(self, db):
+        return inspect_dashboard(db, self.settings.inspections_enabled)['status'] == 'enabled'
+
+    def dashboard_status(self):
+        with connection(self.settings) as db:
+            return inspect_dashboard(db, self.settings.inspections_enabled)['status']
+
+    def evaluation_config(self):
+        with connection(self.settings) as db:
+            ready = evaluations_ready(db)
+        return {'evaluations_enabled': ready, 'gemini_enabled': ready and self.settings.gemini_enabled}
+
+    def request_gemini(self, owner, identity, request_id):
+        EvaluationRepository(self.settings).request(owner, identity, request_id)
+        with connection(self.settings) as db:
+            return self._read(db, identity)
+
+    def decide(self, owner, identity, command):
+        EvaluationRepository(self.settings).decide(owner, identity, command)
+        with connection(self.settings) as db:
+            return self._read(db, identity)
+
+    def dashboard_ready(self):
+        with connection(self.settings) as db:
+            return self._dashboard_ready(db)
+
+    def _publish(self, db, row, *, required=False):
+        if row.get('analysis_id'):
+            return
+
+        def unavailable(status, message):
+            log.info('sample_publish_skipped', extra={
+                'sample_id': str(row['id']), 'state': row.get('state'), 'publish_status': status,
+                'reason': message[:120],
+            })
+            if required:
+                raise ApplicationError(status, message)
+
+        if not self._dashboard_ready(db):
+            return unavailable(503, 'Integração com gráficos requer migration 007 e inspeções ativas.')
+        if row['state'] != 'completed' or not row['source_inspection_id'] or not row['captured_at']:
+            return unavailable(409, 'Somente capturas concluídas de uma sessão podem entrar nos gráficos.')
+        # completed foi validado pelo contrato ao receber o resultado. Revalidar
+        # também metadados históricos; nunca derivar classe do score do detector.
+        try:
+            result = SampleResult.model_validate({
+                key: row.get(key) for key in (
+                    'claim_id', 'state', 'reason', 'metrics', 'classification',
+                    'calibration_version', 'algorithm_version', 'detection',
+                )
+            } | {'calibration_validated': True})
+        except ValidationError:
+            return unavailable(409, 'Resultado não possui classificação e métricas válidas.')
+        if len(result.algorithm_version) > 50:
+            return unavailable(409, 'Versão do algoritmo excede o limite do histórico de análises.')
+        session = db.execute(
+            'SELECT s.*,clock_timestamp() AS observed_at FROM orangevision_web.inspection_sessions s WHERE s.id=%s FOR SHARE',
+            (row['source_inspection_id'],),
+        ).fetchone()
+        if (not session or session['user_id'] != row['user_id']
+                or session['device_id'] != row['device_id']
+                or not capture_within_authorization(row['captured_at'], session, session['observed_at'])):
+            return unavailable(409, 'A origem da captura não autoriza publicação nesta sessão.')
+        identity = uuid4()
+        metrics = result.metrics.model_dump()
+        payload = {
+            'id': str(identity), 'timestamp': row['captured_at'].isoformat(),
+            'classification': result.classification, 'metrics': metrics,
+            'algorithm_version': result.algorithm_version,
+            'calibration_version': result.calibration_version, 'reason': result.reason,
+        }
+        db.execute(
+            '''INSERT INTO public.analises
+            (id,dispositivo_id,data_hora,classificacao,cor_media,regioes_anormais,circularidade,
+             assimetria,score_visual,versao_algoritmo,criado_em,inspection_session_id,calibration_version,classification_reason)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),%s,%s,%s)''',
+            (identity, row['device_id'], row['captured_at'], result.classification,
+             metrics['orange_color_ratio'] * 100, metrics['abnormal_region_ratio'] * 100,
+             metrics['circularity'], metrics['asymmetry'] * 100, metrics['visual_score'],
+             result.algorithm_version, session['id'], result.calibration_version, result.reason),
+        )
+        db.execute(
+            'INSERT INTO orangevision_web.ingestion_receipts(analysis_id,inspection_session_id,payload_hash) VALUES (%s,%s,%s)',
+            (identity, session['id'], payload_digest(payload)),
+        )
+        db.execute('UPDATE orangevision_web.image_samples SET analysis_id=%s WHERE id=%s', (identity, row['id']))
+
+    def publish(self, owner, identity):
+        with connection(self.settings) as db:
+            row = db.execute(
+                'SELECT s.* FROM orangevision_web.image_samples s WHERE s.id=%s AND s.user_id=%s FOR UPDATE',
+                (identity, owner),
+            ).fetchone()
+            if not row:
+                raise ApplicationError(404, 'Amostra não encontrada ou sem acesso.')
+            self._publish(db, row, required=True)
+            result = self._read(db, identity)
+        return result
 
     def devices(self, owner):
         with connection(self.settings) as db:
@@ -52,11 +175,12 @@ class SampleRepository:
             ).fetchone()
 
     def _read(self, db, identity):
-        return public_sample(
+        row = public_sample(
             db.execute(
-                f'SELECT {COLUMNS} FROM orangevision_web.image_samples s WHERE s.id=%s', (identity,)
+                f'SELECT {COLUMNS.format(analysis_id=self._analysis_column(db))} FROM orangevision_web.image_samples s WHERE s.id=%s', (identity,)
             ).fetchone()
         )
+        return {**row, **describe_evaluations(db, [identity]).get(identity, {})}
 
     def _review_owner(
         self, db, device, original_id, original_hash, review_id, review_hash, captured_at=None
@@ -191,20 +315,24 @@ class SampleRepository:
                     review_authorization_id,
                 ),
             )
+            if device is not None and self.settings.gemini_auto_request:
+                # Com WEB_GEMINI_AUTO_REQUEST=false o Gemini fica para quando alguém pedir no site.
+                EvaluationRepository(self.settings).enqueue(db, {'id': identity, 'user_id': owner})
             return self._read(db, identity)
 
     def listing(self, owner, limit, offset):
         with connection(self.settings) as db:
             db.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
             rows = db.execute(
-                f'SELECT {COLUMNS} FROM orangevision_web.image_samples s WHERE user_id=%s ORDER BY created_at DESC,id DESC LIMIT %s OFFSET %s',
+                f'SELECT {COLUMNS.format(analysis_id=self._analysis_column(db))} FROM orangevision_web.image_samples s WHERE user_id=%s ORDER BY created_at DESC,id DESC LIMIT %s OFFSET %s',
                 (owner, limit, offset),
             ).fetchall()
             total = db.execute(
                 'SELECT count(*) AS total FROM orangevision_web.image_samples WHERE user_id=%s',
                 (owner,),
             ).fetchone()['total']
-            return {'items': [public_sample(row) for row in rows], 'total': total}
+            evaluations = describe_evaluations(db, [row['id'] for row in rows])
+        return {'items': [{**public_sample(row), **evaluations.get(row['id'], {})} for row in rows], 'total': total}
 
     def image(self, owner, identity, mask):
         column = 'mask_data' if mask else 'image_data'
@@ -217,14 +345,71 @@ class SampleRepository:
                 raise ApplicationError(404, 'Imagem não encontrada ou sem acesso.')
             return bytes(row['content'])
 
+    def device_evaluations(self, device, identity, lease_hash):
+        with connection(self.settings) as db:
+            # O banco recusa qualquer escrita: a consulta não agenda Gemini nem altera resultados.
+            db.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+            if not self.settings.inspections_enabled or not evaluations_ready(db):
+                raise ApplicationError(503, 'Consulta de avaliações requer migration 008 e inspeções ativas.')
+            # Mesma resposta para amostra inexistente, de outro equipamento ou lease incorreta.
+            hidden = ApplicationError(404, 'Amostra não encontrada ou sem acesso.')
+            sample = db.execute(
+                'SELECT id,user_id,state,captured_at,source_inspection_id,review_authorization_id FROM orangevision_web.image_samples WHERE id=%s AND device_id=%s',
+                (identity, device),
+            ).fetchone()
+            if not sample:
+                raise hidden
+            origins = [
+                origin
+                for origin in (sample['source_inspection_id'], sample['review_authorization_id'])
+                if origin is not None
+            ]
+            sessions = db.execute(
+                'SELECT id,lease_hash,started_at,authorization_expires_at,closed_at,clock_timestamp() AS observed_at FROM orangevision_web.inspection_sessions WHERE id=ANY(%s) AND device_id=%s AND user_id=%s',
+                (origins, device, sample['user_id']),
+            ).fetchall()
+            session = next(
+                (
+                    row
+                    for row in sessions
+                    if row['started_at']
+                    and row['authorization_expires_at']
+                    and secrets.compare_digest(row['lease_hash'] or '', lease_hash)
+                ),
+                None,
+            )
+            if not session:
+                raise hidden
+            if not db.execute(
+                'SELECT 1 FROM orangevision_web.device_access WHERE user_id=%s AND device_id=%s',
+                (sample['user_id'], device),
+            ).fetchone():
+                raise ApplicationError(403, 'Vínculo do equipamento removido.')
+            deadline = evaluation_access_deadline(session)
+            if session['observed_at'] >= deadline:
+                raise ApplicationError(410, 'Prazo de consulta encerrado. Consulte o resultado no site.')
+            return {
+                'sample_id': sample['id'],
+                'inspection_id': session['id'],
+                'state': sample['state'],
+                'captured_at': sample['captured_at'],
+                'access_expires_at': deadline,
+                'observed_at': session['observed_at'],
+                **describe_evaluations(db, [identity])[identity],
+            }
+
     def queue(self, owner, identity, device):
         with connection(self.settings) as db:
             row = db.execute(
-                'SELECT state,device_id,claim_expires_at,clock_timestamp() AS now FROM orangevision_web.image_samples WHERE id=%s AND user_id=%s FOR UPDATE',
+                f'SELECT s.*,{self._analysis_column(db)} AS analysis_id,clock_timestamp() AS now FROM orangevision_web.image_samples s WHERE id=%s AND user_id=%s FOR UPDATE',
                 (identity, owner),
             ).fetchone()
             if not row:
                 raise ApplicationError(404, 'Amostra não encontrada ou sem acesso.')
+            if row['analysis_id']:
+                raise ApplicationError(409, 'Esta captura já foi registrada no histórico. Faça uma nova captura para outra análise.')
+            if row['source_inspection_id'] and row['device_id'] != device:
+                raise ApplicationError(409, 'Reprocesse a captura no equipamento de origem.')
             if not db.execute(
                 'SELECT 1 FROM orangevision_web.device_access WHERE user_id=%s AND device_id=%s',
                 (owner, device),
@@ -241,6 +426,7 @@ class SampleRepository:
                 )
             if row['state'] == 'queued' and row['device_id'] == device:
                 return self._read(db, identity)
+            record_local(db, row)
             db.execute(
                 "UPDATE orangevision_web.image_samples SET state='queued',device_id=%s,claim_id=NULL,lease_hash=NULL,claim_expires_at=NULL,metrics=NULL,classification=NULL,reason=NULL,calibration_version=NULL,algorithm_version=NULL,mask_data=NULL,detection=NULL,result_hash=NULL,started_at=NULL,finished_at=NULL,updated_at=clock_timestamp() WHERE id=%s",
                 (device, identity),
@@ -279,6 +465,7 @@ class SampleRepository:
                 "UPDATE orangevision_web.image_samples SET state='processing',claim_id=%s,lease_hash=%s,claim_expires_at=clock_timestamp()+interval '5 minutes',started_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=%s",
                 (claim_id, lease_hash, row['id']),
             )
+            log.info('sample_claimed', extra={'sample_id': str(row['id']), 'device_id': str(device)})
             return self._read(db, row['id'])
 
     def _assignment(self, db, device, identity, lease_hash, claim_id=None, allow_finished=False):
@@ -314,6 +501,8 @@ class SampleRepository:
     def finish(self, device, identity, lease_hash, payload, payload_hash, mask):
         from uuid import UUID
 
+        # Concordância só faz sentido se o Gemini é pedido sozinho; senão o local publica.
+        agreement = self.settings.gemini_auto_adopt and self.settings.gemini_auto_request
         with connection(self.settings) as db:
             row = self._assignment(
                 db, device, identity, lease_hash, UUID(payload['claim_id']), allow_finished=True
@@ -321,20 +510,47 @@ class SampleRepository:
             if row['result_hash']:
                 if row['result_hash'] != payload_hash:
                     raise ApplicationError(409, 'Resultado divergente para a mesma reserva.')
-                return self._read(db, identity)
-            db.execute(
-                'UPDATE orangevision_web.image_samples SET state=%s,metrics=%s,classification=%s,reason=%s,calibration_version=%s,algorithm_version=%s,mask_data=%s,detection=%s,result_hash=%s,finished_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=%s',
-                (
-                    payload['state'],
-                    Jsonb(payload['metrics']) if payload['metrics'] is not None else None,
-                    payload['classification'],
-                    payload['reason'],
-                    payload['calibration_version'],
-                    payload['algorithm_version'],
-                    mask,
-                    Jsonb(payload['detection']) if payload.get('detection') is not None else None,
-                    payload_hash,
-                    identity,
-                ),
-            )
+            else:
+                db.execute(
+                    'UPDATE orangevision_web.image_samples SET state=%s,metrics=%s,classification=%s,reason=%s,calibration_version=%s,algorithm_version=%s,mask_data=%s,detection=%s,result_hash=%s,finished_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=%s',
+                    (
+                        payload['state'],
+                        Jsonb(payload['metrics']) if payload['metrics'] is not None else None,
+                        payload['classification'],
+                        payload['reason'],
+                        payload['calibration_version'],
+                        payload['algorithm_version'],
+                        mask,
+                        Jsonb(payload['detection']) if payload.get('detection') is not None else None,
+                        payload_hash,
+                        identity,
+                    ),
+                )
+            saved = db.execute('SELECT s.* FROM orangevision_web.image_samples s WHERE id=%s', (identity,)).fetchone()
+            record_local(db, saved)
+            if not agreement:
+                # Modo anterior: resultado local completo publica sozinho.
+                self._publish(db, saved)
+            result = self._read(db, identity)
+        if agreement:
+            # Modo concordância: só publica se o Gemini já chegou à mesma categoria.
+            result = self._after_local_result(identity, saved['user_id'])
+        log.info('sample_result_received', extra={
+            'sample_id': str(identity), 'device_id': str(device), 'state': payload['state'],
+            'classification': payload['classification'], 'algorithm_version': payload['algorithm_version'],
+            'calibration_version': payload['calibration_version'],
+            'published': bool(result.get('analysis_id')),
+        })
+        return result
+
+    def _after_local_result(self, identity, owner):
+        from .evaluation_repository import AutoAdoption
+
+        try:
+            outcome = AutoAdoption(self.settings).run(identity, owner)
+        except Exception as error:
+            outcome = 'failed'
+            log.error('agreement_check_failed', extra={'sample_id': str(identity), 'error_type': type(error).__name__})
+        log.info('agreement_check', extra={'sample_id': str(identity), 'outcome': outcome})
+        with connection(self.settings) as db:
             return self._read(db, identity)

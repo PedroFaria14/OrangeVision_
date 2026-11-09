@@ -12,9 +12,11 @@ da pasta local, inclusive fotos salvas pela webcam. Não exige uma fruta física
 nem sessão de inspeção pareada para experimentar arquivos. O processamento exige
 um equipamento provisionado e autorizado para a conta.
 
-As imagens são amostras de teste/calibração: **não são inseridas em `analises`**,
-não entram no dashboard de aprovação e não herdam o operador de quem estiver
-logado em outro momento. O proprietário é quem fez o upload autenticado.
+Arquivos enviados sem sessão continuam sendo amostras de teste/calibração e não
+entram nos indicadores de inspeção. Capturas de sessão com classificação válida
+podem alimentar o histórico e os gráficos após a ativação da migration 007;
+consulte [Capturas_Nos_Graficos.md](Capturas_Nos_Graficos.md).
+O proprietário não é herdado de quem estiver logado em outro momento.
 
 ## Como testar agora, sem laranja
 

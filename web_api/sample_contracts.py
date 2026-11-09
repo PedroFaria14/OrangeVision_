@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
+from .evaluation_contracts import AdoptedDecision, Evaluation, GeminiJob
+
 SampleState = Literal[
     'received', 'queued', 'processing', 'awaiting_review', 'completed', 'not_evaluable', 'failed'
 ]
@@ -90,6 +92,24 @@ class ImageSample(BaseModel):
     source_inspection_id: UUID | None = None
     captured_at: datetime | None = None
     review_authorization_id: UUID | None = None
+    analysis_id: UUID | None = Field(default=None, description='Análise registrada no histórico e gráficos; nula enquanto não publicada.')
+    evaluations: list[Evaluation] = Field(default_factory=list)
+    gemini_job: GeminiJob | None = None
+    decision: AdoptedDecision | None = None
+    comparison: Literal['pending', 'agreement', 'divergence', 'inconclusive'] = 'pending'
+
+
+class DeviceSampleEvaluations(BaseModel):
+    sample_id: UUID
+    inspection_id: UUID = Field(description='Sessão de origem autorizada pela lease enviada.')
+    state: SampleState
+    captured_at: datetime | None
+    evaluations: list[Evaluation]
+    gemini_job: GeminiJob | None = Field(description='Nulo quando não há avaliação Gemini agendada.')
+    decision: AdoptedDecision | None
+    comparison: Literal['pending', 'agreement', 'divergence', 'inconclusive']
+    access_expires_at: datetime = Field(description='Limite atual da consulta; antecipa se a sessão for encerrada.')
+    observed_at: datetime = Field(description='Horário do banco nesta consulta.')
 
 
 class AuthorizePhotoReview(BaseModel):
@@ -109,6 +129,10 @@ class SampleList(BaseModel):
 
 class SamplesConfig(BaseModel):
     enabled: bool
+    dashboard_enabled: bool = False
+    dashboard_status: Literal['enabled', 'inspections_disabled', 'schema_unavailable', 'permissions_missing'] = 'schema_unavailable'
+    evaluations_enabled: bool = False
+    gemini_enabled: bool = False
     processing: Literal['device'] = 'device'
     max_upload_bytes: int = 5242880
 

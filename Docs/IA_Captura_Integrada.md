@@ -1,5 +1,9 @@
 # IA local, captura integrada e diagnóstico da fila
 
+> A segunda opinião Gemini, executada no servidor e independente do processamento
+> local abaixo, está em [Avaliacoes_Local_Gemini.md](Avaliacoes_Local_Gemini.md).
+> Ela exige worker e migration 008; não depende de inventar calibração OpenCV.
+
 ## Entrega e limites
 
 - Detector COCO/orange local, ONNX YOLOX-S oficial do OpenCV Zoo, 35.858.002 bytes,
@@ -12,11 +16,14 @@
   Score não é acurácia nem qualidade. Ausência de detecção e múltiplas candidatas
   recusam avaliação de qualidade de uma fruta única.
 - Cor/regiões anormais continuam indisponíveis sem referências calibradas.
-  Categoria/score de qualidade só são emitidos com calibração completa validada
+  Categoria/score de qualidade locais só são emitidos com calibração completa validada
   especificamente para `segmentation_method: yolox-s-grabcut-v1`. Uma calibração
   HSV anterior não é promovida automaticamente para o novo método.
-- Tudo continua sendo **amostra experimental**, separado de `analises` e das
-  estatísticas oficiais. Não há diagnóstico de doença, comestibilidade ou interior.
+- A galeria preserva as imagens e os diagnósticos experimentais. Com migration
+  007 e inspeções ativas, capturas de sessão com classificação válida também
+  alimentam `analises` e os gráficos; veja [Capturas_Nos_Graficos.md](Capturas_Nos_Graficos.md).
+  Sem avaliação válida, não há indicador de qualidade. Não há diagnóstico de
+  doença, comestibilidade ou interior.
 
 ## Um comando no Windows
 
@@ -24,7 +31,7 @@ O script utiliza o próprio diretório, independentemente de onde o PowerShell a
 Não é preciso ativar `.venv-device` da raiz.
 
 ```powershell
-powershell.exe -ExecutionPolicy RemoteSigned -File "D:\Estudo_Pedro\USF\Arquitetura\Projeto\Orange\OrangeVision_\Start-OrangeVision.ps1"
+powershell.exe -ExecutionPolicy RemoteSigned -File "D:\Estudo_Pedro\USF\Arquitetura\Projeto\OrangeVision\Start-OrangeVision.ps1"
 ```
 
 Ele verifica/inicia a API na 8001, Vite na 5173 e abre uma janela do consumidor
@@ -36,7 +43,7 @@ existente estiver desatualizada, orienta encerrar a janela antiga com Ctrl+C.
 Para **câmera integrada**, encerre antes o consumidor anterior e execute:
 
 ```powershell
-powershell.exe -ExecutionPolicy RemoteSigned -File "D:\Estudo_Pedro\USF\Arquitetura\Projeto\Orange\OrangeVision_\Start-OrangeVision.ps1" -Mode Camera
+powershell.exe -ExecutionPolicy RemoteSigned -File "D:\Estudo_Pedro\USF\Arquitetura\Projeto\OrangeVision\Start-OrangeVision.ps1" -Mode Camera
 ```
 
 Para iniciar a câmera já em **automático**, use `-Mode Auto`. Se já houver

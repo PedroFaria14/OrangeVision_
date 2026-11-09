@@ -35,6 +35,10 @@ o dispositivo autorizado processa arquivos, sem exigir fruta física/câmera.
   calibration_validated,mask_base64?}`. Máscara opcional PNG binária nas mesmas
   dimensões da imagem normalizada. Mesmo resultado/claim é idempotente; resultado
   divergente ou reserva reatribuída é conflito, nunca sobrescreve resultado atual.
+- `GET /api/device/samples/{id}/evaluations`, header `X-Inspection-Lease` da sessão de
+  origem: leitura das avaliações local e Gemini, sem efeitos colaterais, até 1 hora após
+  o encerramento ou expiração da sessão (410 depois disso). Requer migration 008 e
+  inspeções ativas. Detalhes: `Docs/Avaliacoes_Local_Gemini.md`, seção 9.1.
 
 ## Estados persistidos
 

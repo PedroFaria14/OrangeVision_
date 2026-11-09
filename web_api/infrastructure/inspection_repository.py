@@ -119,9 +119,14 @@ class InspectionRepository:
                     "UPDATE orangevision_web.inspection_sessions SET state='closed',closed_at=now() WHERE id=%s",
                     (session_id,),
                 )
-            elif row['state'] == 'active':
+            elif row['state'] in ('active', 'closing'):
+                # Encerramento confirmado pela pessoa no site vale na hora: o equipamento
+                # descobre o estado 'closed' na próxima consulta e pede novo pareamento.
+                # Fotos tiradas antes de closed_at continuam aceitas (capture_within_authorization).
+                # 'closing' só existe em sessões antigas, presas à espera do equipamento.
                 db.execute(
-                    "UPDATE orangevision_web.inspection_sessions SET state='closing' WHERE id=%s",
+                    "UPDATE orangevision_web.inspection_sessions SET state='closed',"
+                    'closed_at=LEAST(now(),authorization_expires_at) WHERE id=%s',
                     (session_id,),
                 )
             result = db.execute(SESSION_SELECT + ' WHERE s.id=%s', (session_id,)).fetchone()

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "yarn build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/status/render.ts": {
+      "maxDuration": 20
+    },
+    "api/admin/auth.ts": {
+      "maxDuration": 20
+    },
+    "api/admin/studio.ts": {
+      "maxDuration": 20
+    }
+  },
+  "routes": [
+    {
+      "src": "/admin-prisma.html",
+      "headers": {
+        "Cache-Control": "no-store, private",
+        "X-Robots-Tag": "noindex, nofollow",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+      },
+      "continue": true
+    },
+    { "handle": "filesystem" },
+    {
+      "src": "/api/admin/auth/(.*)",
+      "dest": "/api/admin/auth?__path=$1"
+    },
+    { "src": "/api/admin(?:/.*)?", "status": 404 },
+    {
+      "src": "/api",
+      "dest": "https://orangevision-rs9g.onrender.com/api"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "https://orangevision-rs9g.onrender.com/api/$1"
+    },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}

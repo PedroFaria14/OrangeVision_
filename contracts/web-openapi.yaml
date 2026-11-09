@@ -323,6 +323,214 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HttpErrorResponse'
+  /api/devices:
+    get:
+      summary: List Devices
+      operationId: list_devices_api_devices_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDevices'
+        '401':
+          description: Sessão ausente ou expirada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '403':
+          description: Sem permissão ou origem/CSRF inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '404':
+          description: Recurso inexistente ou não autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '409':
+          description: Conflito de cadastro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '422':
+          description: Campos ausentes/inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '429':
+          description: Limite de tentativas/capacidade. Consultar Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '500':
+          description: Falha interna sem exposição de dados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '503':
+          description: Banco indisponível ou migration ainda não aplicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+      security:
+      - APIKeyCookie: []
+    post:
+      summary: Register Device
+      operationId: register_device_api_devices_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegistration'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceCredentialIssued'
+        '401':
+          description: Sessão ausente ou expirada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '403':
+          description: Sem permissão ou origem/CSRF inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '404':
+          description: Recurso inexistente ou não autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '409':
+          description: Conflito de cadastro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '422':
+          description: Campos ausentes/inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '429':
+          description: Limite de tentativas/capacidade. Consultar Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '500':
+          description: Falha interna sem exposição de dados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '503':
+          description: Banco indisponível ou migration ainda não aplicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '200':
+          description: Comando já confirmado, sem segredo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceCredentialIssued'
+      security:
+      - APIKeyCookie: []
+  /api/devices/{device_id}/credentials:
+    post:
+      summary: Rotate Credential
+      operationId: rotate_credential_api_devices__device_id__credentials_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Device Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialRegistration'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceCredentialIssued'
+        '401':
+          description: Sessão ausente ou expirada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '403':
+          description: Sem permissão ou origem/CSRF inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '404':
+          description: Recurso inexistente ou não autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '409':
+          description: Conflito de cadastro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '422':
+          description: Campos ausentes/inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '429':
+          description: Limite de tentativas/capacidade. Consultar Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '500':
+          description: Falha interna sem exposição de dados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '503':
+          description: Banco indisponível ou migration ainda não aplicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
   /api/analyses:
     get:
       summary: Analyses
@@ -2469,6 +2677,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HttpErrorResponse'
+  /api/samples/{sample_id}/analysis:
+    post:
+      summary: Publish Sample
+      description: Registra uma captura concluída da própria conta no dashboard. Idempotente
+        por amostra; requer migration 007 e inspeções ativas.
+      operationId: publish_sample_api_samples__sample_id__analysis_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: sample_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Sample Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageSample'
+        '401':
+          description: Sessão ausente ou expirada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '403':
+          description: Sem permissão ou origem/CSRF inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '404':
+          description: Recurso inexistente ou não autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '409':
+          description: Conflito de cadastro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '422':
+          description: Campos ausentes/inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '429':
+          description: Limite de tentativas/capacidade. Consultar Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '500':
+          description: Falha interna sem exposição de dados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '503':
+          description: Banco indisponível ou migration ainda não aplicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
   /api/device/samples/claim:
     post:
       summary: Claim Sample
@@ -2539,6 +2818,156 @@ paths:
                 $ref: '#/components/schemas/HttpErrorResponse'
       security:
       - DeviceCredential: []
+  /api/samples/{sample_id}/evaluations/gemini:
+    post:
+      summary: Request Gemini
+      operationId: request_gemini_api_samples__sample_id__evaluations_gemini_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: sample_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Sample Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiRequest'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageSample'
+        '401':
+          description: Sessão ausente ou expirada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '403':
+          description: Sem permissão ou origem/CSRF inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '404':
+          description: Recurso inexistente ou não autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '409':
+          description: Conflito de cadastro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '422':
+          description: Campos ausentes/inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '429':
+          description: Limite de tentativas/capacidade. Consultar Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '500':
+          description: Falha interna sem exposição de dados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '503':
+          description: Banco indisponível ou migration ainda não aplicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+  /api/samples/{sample_id}/decisions:
+    post:
+      summary: Decide Sample
+      operationId: decide_sample_api_samples__sample_id__decisions_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: sample_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Sample Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageSample'
+        '401':
+          description: Sessão ausente ou expirada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '403':
+          description: Sem permissão ou origem/CSRF inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '404':
+          description: Recurso inexistente ou não autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '409':
+          description: Conflito de cadastro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '422':
+          description: Campos ausentes/inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '429':
+          description: Limite de tentativas/capacidade. Consultar Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '500':
+          description: Falha interna sem exposição de dados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '503':
+          description: Banco indisponível ou migration ainda não aplicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
   /api/device/samples/{sample_id}/image:
     get:
       summary: Device Sample Image
@@ -2610,6 +3039,93 @@ paths:
                 $ref: '#/components/schemas/HttpErrorResponse'
         '503':
           description: Banco indisponível ou migration ainda não aplicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+  /api/device/samples/{sample_id}/evaluations:
+    get:
+      summary: Device Sample Evaluations
+      description: Consulta somente leitura das avaliações de uma captura do próprio
+        equipamento. Exige a lease da sessão de origem, vale até uma hora após o encerramento
+        ou expiração, não agenda Gemini, não consome a fila e não altera resultados.
+      operationId: device_sample_evaluations_api_device_samples__sample_id__evaluations_get
+      security:
+      - DeviceCredential: []
+      parameters:
+      - name: sample_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Sample Id
+      - name: X-Inspection-Lease
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 32
+          maxLength: 128
+          title: X-Inspection-Lease
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceSampleEvaluations'
+        '401':
+          description: Sessão ausente ou expirada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '403':
+          description: Vínculo da conta com o equipamento removido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '404':
+          description: Amostra inexistente, de outro equipamento, sem sessão ou com
+            lease incorreta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '409':
+          description: Conflito de cadastro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '422':
+          description: Campos ausentes/inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '429':
+          description: Limite de tentativas/capacidade. Consultar Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '500':
+          description: Falha interna sem exposição de dados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '503':
+          description: Banco indisponível, migration 008 ausente ou inspeções desativadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpErrorResponse'
+        '410':
+          description: Prazo de consulta encerrado; o resultado continua no site.
           content:
             application/json:
               schema:
@@ -2699,6 +3215,40 @@ paths:
                 $ref: '#/components/schemas/HttpErrorResponse'
 components:
   schemas:
+    AdoptedDecision:
+      properties:
+        revision:
+          type: integer
+          title: Revision
+        origin:
+          type: string
+          enum:
+          - local
+          - gemini
+          - human
+          title: Origin
+        classification:
+          type: string
+          enum:
+          - APROVADA
+          - ATENCAO
+          - REVISAR
+          title: Classification
+        reason:
+          type: string
+          title: Reason
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - revision
+      - origin
+      - classification
+      - reason
+      - created_at
+      title: AdoptedDecision
     Analysis:
       properties:
         id:
@@ -2749,6 +3299,19 @@ components:
           - type: string
           - type: 'null'
           title: Classification Reason
+        evaluation_source:
+          anyOf:
+          - type: string
+            enum:
+            - local
+            - gemini
+            - human
+          - type: 'null'
+          title: Evaluation Source
+        decision_revision:
+          type: integer
+          title: Decision Revision
+          default: 0
       type: object
       required:
       - id
@@ -2851,6 +3414,17 @@ components:
       - absolute
       - percent
       title: CountChange
+    CredentialRegistration:
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          title: Request Id
+      additionalProperties: false
+      type: object
+      required:
+      - request_id
+      title: CredentialRegistration
     Credentials:
       properties:
         email:
@@ -2870,6 +3444,42 @@ components:
       - email
       - password
       title: Credentials
+    DecisionRequest:
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          title: Request Id
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        evaluation_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Evaluation Id
+        classification:
+          type: string
+          enum:
+          - APROVADA
+          - ATENCAO
+          - REVISAR
+          title: Classification
+        reason:
+          type: string
+          maxLength: 1000
+          minLength: 5
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - request_id
+      - expected_revision
+      - classification
+      - reason
+      title: DecisionRequest
     Detection:
       properties:
         status:
@@ -2924,6 +3534,24 @@ components:
       - model
       - inference_ms
       title: Detection
+    DeviceCredentialIssued:
+      properties:
+        device:
+          $ref: '#/components/schemas/UserDevice'
+        credential:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Credential
+        replayed:
+          type: boolean
+          title: Replayed
+      type: object
+      required:
+      - device
+      - credential
+      - replayed
+      title: DeviceCredentialIssued
     DeviceInspection:
       properties:
         id:
@@ -3003,6 +3631,151 @@ components:
       - id
       - name
       title: DeviceOption
+    DeviceRegistration:
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          title: Request Id
+        name:
+          type: string
+          maxLength: 100
+          minLength: 2
+          title: Name
+      additionalProperties: false
+      type: object
+      required:
+      - request_id
+      - name
+      title: DeviceRegistration
+    DeviceSampleEvaluations:
+      properties:
+        sample_id:
+          type: string
+          format: uuid
+          title: Sample Id
+        inspection_id:
+          type: string
+          format: uuid
+          title: Inspection Id
+          description: Sessão de origem autorizada pela lease enviada.
+        state:
+          type: string
+          enum:
+          - received
+          - queued
+          - processing
+          - awaiting_review
+          - completed
+          - not_evaluable
+          - failed
+          title: State
+        captured_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Captured At
+        evaluations:
+          items:
+            $ref: '#/components/schemas/Evaluation'
+          type: array
+          title: Evaluations
+        gemini_job:
+          anyOf:
+          - $ref: '#/components/schemas/GeminiJob'
+          - type: 'null'
+          description: Nulo quando não há avaliação Gemini agendada.
+        decision:
+          anyOf:
+          - $ref: '#/components/schemas/AdoptedDecision'
+          - type: 'null'
+        comparison:
+          type: string
+          enum:
+          - pending
+          - agreement
+          - divergence
+          - inconclusive
+          title: Comparison
+        access_expires_at:
+          type: string
+          format: date-time
+          title: Access Expires At
+          description: Limite atual da consulta; antecipa se a sessão for encerrada.
+        observed_at:
+          type: string
+          format: date-time
+          title: Observed At
+          description: Horário do banco nesta consulta.
+      type: object
+      required:
+      - sample_id
+      - inspection_id
+      - state
+      - captured_at
+      - evaluations
+      - gemini_job
+      - decision
+      - comparison
+      - access_expires_at
+      - observed_at
+      title: DeviceSampleEvaluations
+    Evaluation:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        origin:
+          type: string
+          enum:
+          - local
+          - gemini
+          title: Origin
+        state:
+          type: string
+          enum:
+          - completed
+          - awaiting_review
+          - not_evaluable
+          - failed
+          title: State
+        classification:
+          anyOf:
+          - type: string
+            enum:
+            - APROVADA
+            - ATENCAO
+            - REVISAR
+          - type: 'null'
+          title: Classification
+        reason:
+          type: string
+          title: Reason
+        criteria_version:
+          type: string
+          title: Criteria Version
+        model_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Version
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - origin
+      - state
+      - classification
+      - reason
+      - criteria_version
+      - model_version
+      - created_at
+      title: Evaluation
     ExecutorAcknowledgement:
       properties:
         last_seen_at:
@@ -3053,6 +3826,52 @@ components:
       - field
       - message
       title: FieldIssue
+    GeminiJob:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        state:
+          type: string
+          enum:
+          - queued
+          - running
+          - retry_wait
+          - completed
+          - failed
+          title: State
+        attempts:
+          type: integer
+          title: Attempts
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - state
+      - attempts
+      - error_code
+      - updated_at
+      title: GeminiJob
+    GeminiRequest:
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          title: Request Id
+      additionalProperties: false
+      type: object
+      required:
+      - request_id
+      title: GeminiRequest
     HttpErrorResponse:
       properties:
         detail:
@@ -3178,6 +3997,36 @@ components:
             format: uuid
           - type: 'null'
           title: Review Authorization Id
+        analysis_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Analysis Id
+          description: Análise registrada no histórico e gráficos; nula enquanto não
+            publicada.
+        evaluations:
+          items:
+            $ref: '#/components/schemas/Evaluation'
+          type: array
+          title: Evaluations
+        gemini_job:
+          anyOf:
+          - $ref: '#/components/schemas/GeminiJob'
+          - type: 'null'
+        decision:
+          anyOf:
+          - $ref: '#/components/schemas/AdoptedDecision'
+          - type: 'null'
+        comparison:
+          type: string
+          enum:
+          - pending
+          - agreement
+          - divergence
+          - inconclusive
+          title: Comparison
+          default: pending
       type: object
       required:
       - id
@@ -3850,6 +4699,27 @@ components:
         enabled:
           type: boolean
           title: Enabled
+        dashboard_enabled:
+          type: boolean
+          title: Dashboard Enabled
+          default: false
+        dashboard_status:
+          type: string
+          enum:
+          - enabled
+          - inspections_disabled
+          - schema_unavailable
+          - permissions_missing
+          title: Dashboard Status
+          default: schema_unavailable
+        evaluations_enabled:
+          type: boolean
+          title: Evaluations Enabled
+          default: false
+        gemini_enabled:
+          type: boolean
+          title: Gemini Enabled
+          default: false
         processing:
           type: string
           const: device
@@ -3966,6 +4836,61 @@ components:
       - items
       - as_of
       title: Timeseries
+    UserDevice:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        can_manage_credentials:
+          type: boolean
+          title: Can Manage Credentials
+      type: object
+      required:
+      - id
+      - name
+      - created_at
+      - can_manage_credentials
+      title: UserDevice
+    UserDevices:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/UserDevice'
+          type: array
+          title: Items
+        registration_enabled:
+          type: boolean
+          title: Registration Enabled
+        managed_count:
+          type: integer
+          minimum: 0.0
+          title: Managed Count
+        max_devices:
+          type: integer
+          minimum: 1.0
+          title: Max Devices
+        api_base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Api Base Url
+      type: object
+      required:
+      - items
+      - registration_enabled
+      - managed_count
+      - max_devices
+      title: UserDevices
     ValidationErrorResponse:
       properties:
         detail:

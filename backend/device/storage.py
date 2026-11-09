@@ -62,7 +62,23 @@ class Store:
                   state TEXT NOT NULL DEFAULT 'pending', error_type TEXT);
                 CREATE TABLE IF NOT EXISTS camera_photo_drafts (
                   id TEXT PRIMARY KEY,captured_at TEXT NOT NULL,image BLOB NOT NULL,
-                  detection TEXT NOT NULL,grant_data TEXT,state TEXT NOT NULL DEFAULT 'review');
+                   detection TEXT NOT NULL,grant_data TEXT,state TEXT NOT NULL DEFAULT 'review');
+                CREATE TABLE IF NOT EXISTS device_identity (
+                  singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+                  device_id TEXT NOT NULL,api_origin TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS sample_claim_attempt (
+                  singleton INTEGER PRIMARY KEY CHECK(singleton=1),data TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS sample_status (
+                  sample_id TEXT PRIMARY KEY,
+                  photo_id TEXT UNIQUE REFERENCES camera_sample_outbox(id),
+                  confirmation TEXT NOT NULL DEFAULT 'received',
+                  result TEXT,payload TEXT,claim_id TEXT,lease_token TEXT,
+                  analysis_id TEXT,updated_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS sample_evaluation_tracking (
+                  sample_id TEXT PRIMARY KEY REFERENCES sample_status(sample_id),
+                  tracking TEXT NOT NULL DEFAULT 'active',
+                  response TEXT,failures INTEGER NOT NULL DEFAULT 0,last_error TEXT,
+                  next_poll_at REAL NOT NULL DEFAULT 0,updated_at TEXT NOT NULL);
             """)
             db.execute('BEGIN IMMEDIATE')
             columns = {row[1] for row in db.execute('PRAGMA table_info(camera_sample_outbox)')}
@@ -74,6 +90,17 @@ class Store:
                 db.execute(
                     'ALTER TABLE camera_sample_outbox ADD COLUMN original_source_known INTEGER NOT NULL DEFAULT 1'
                 )
+
+    def bind_device(self, device_id, api_origin):
+        from .provisioning import assert_database_identity
+
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            assert_database_identity(self.path.resolve(), device_id, api_origin)
+            db.execute(
+                'INSERT OR IGNORE INTO device_identity VALUES (1,?,?)',
+                (device_id, api_origin),
+            )
 
     def save_camera_sample(self, identity, session_id, captured_at, content):
         if not content or len(content) > 5242880:
@@ -237,6 +264,192 @@ class Store:
                 "UPDATE camera_sample_outbox SET state=?,error_type=? WHERE id=? AND state='pending'",
                 (state, error, identity),
             )
+
+    def record_sample_receipt(self, photo_id, sample_id, analysis_id=None):
+        """Confirma upload e associação remota juntos, sem reassociar a foto."""
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            previous = db.execute(
+                'SELECT photo_id,analysis_id FROM sample_status WHERE sample_id=?', (sample_id,)
+            ).fetchone()
+            if previous:
+                if previous['photo_id'] not in (None, photo_id):
+                    raise RuntimeError('Amostra já associada a outra foto local.')
+                if analysis_id and previous['analysis_id'] not in (None, analysis_id):
+                    raise RuntimeError('API retornou outro analysis_id para a mesma amostra.')
+            db.execute(
+                '''INSERT INTO sample_status(sample_id,photo_id,analysis_id,updated_at)
+                VALUES (?,?,?,?) ON CONFLICT(sample_id) DO UPDATE SET
+                photo_id=excluded.photo_id,
+                analysis_id=coalesce(sample_status.analysis_id,excluded.analysis_id),
+                updated_at=excluded.updated_at''',
+                (sample_id, photo_id, analysis_id, utcnow()),
+            )
+            db.execute(
+                "UPDATE camera_sample_outbox SET state='synced',error_type=NULL WHERE id=?",
+                (photo_id,),
+            )
+
+    def sample_claim(self, attempt=None):
+        with self.db() as db:
+            if attempt is not None:
+                db.execute('INSERT INTO sample_claim_attempt VALUES (1,?)', (json.dumps(attempt),))
+            row = db.execute('SELECT data FROM sample_claim_attempt WHERE singleton=1').fetchone()
+        return json.loads(row['data']) if row else None
+
+    def clear_sample_claim(self):
+        with self.db() as db:
+            db.execute('DELETE FROM sample_claim_attempt')
+
+    def start_sample_work(self, sample_id, attempt):
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            previous = db.execute(
+                'SELECT confirmation FROM sample_status WHERE sample_id=?', (sample_id,)
+            ).fetchone()
+            # 'confirmed' = o servidor já aceitou o resultado anterior; se ele entrega a
+            # amostra de novo, é um pedido de reprocessamento e o novo resultado vale.
+            # Só um resultado ainda NÃO confirmado ('processing'/'pending') é protegido.
+            if previous and previous['confirmation'] not in ('received', 'confirmed'):
+                raise RuntimeError('Amostra já possui avaliação local; não será sobrescrita.')
+            db.execute(
+                '''INSERT INTO sample_status(sample_id,confirmation,claim_id,lease_token,updated_at)
+                VALUES (?,'processing',?,?,?) ON CONFLICT(sample_id) DO UPDATE SET
+                confirmation='processing',claim_id=excluded.claim_id,
+                lease_token=excluded.lease_token,result=NULL,payload=NULL,
+                analysis_id=CASE WHEN sample_status.confirmation='confirmed' THEN NULL
+                    ELSE sample_status.analysis_id END,
+                updated_at=excluded.updated_at''',
+                (sample_id, attempt['claim_id'], attempt['lease_token'], utcnow()),
+            )
+            db.execute('DELETE FROM sample_claim_attempt')
+
+    def pending_sample_work(self):
+        with self.db() as db:
+            row = db.execute(
+                "SELECT * FROM sample_status WHERE confirmation IN ('processing','pending') "
+                'ORDER BY updated_at,rowid LIMIT 1'
+            ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        for key in ('result', 'payload'):
+            result[key] = json.loads(result[key]) if result[key] else None
+        return result
+
+    def save_sample_result(self, sample_id, payload, summary):
+        with self.db() as db:
+            previous = db.execute(
+                'SELECT claim_id,payload FROM sample_status WHERE sample_id=?', (sample_id,)
+            ).fetchone()
+            if not previous or previous['claim_id'] != payload['claim_id']:
+                raise RuntimeError('Resultado não corresponde à reserva local da amostra.')
+            if previous['payload'] and json.loads(previous['payload']) != payload:
+                raise RuntimeError('Não é permitido alterar um resultado pendente de confirmação.')
+            db.execute(
+                "UPDATE sample_status SET result=?,payload=?,confirmation='pending',updated_at=? "
+                'WHERE sample_id=?',
+                (json.dumps(summary), json.dumps(payload), utcnow(), sample_id),
+            )
+
+    def confirm_sample_result(self, sample_id, summary, analysis_id):
+        with self.db() as db:
+            previous = db.execute(
+                'SELECT analysis_id FROM sample_status WHERE sample_id=?', (sample_id,)
+            ).fetchone()
+            if not previous:
+                raise RuntimeError('Confirmação sem avaliação local correspondente.')
+            if analysis_id and previous['analysis_id'] not in (None, analysis_id):
+                raise RuntimeError('API retornou outro analysis_id para a mesma amostra.')
+            db.execute(
+                "UPDATE sample_status SET result=?,confirmation='confirmed',"
+                'analysis_id=coalesce(analysis_id,?),payload=NULL,claim_id=NULL,lease_token=NULL,'
+                'updated_at=? WHERE sample_id=?',
+                (json.dumps(summary), analysis_id, utcnow(), sample_id),
+            )
+
+    def due_sample_evaluation(self, now):
+        """Próxima captura a consultar: captura local -> amostra remota -> sessão de origem."""
+        with self.db() as db:
+            row = db.execute(
+                """SELECT s.sample_id,o.session_id,g.data,coalesce(t.failures,0) AS failures
+                FROM sample_status s
+                JOIN camera_sample_outbox o ON o.id=s.photo_id AND o.original_source_known=1
+                JOIN grants g ON g.id=o.session_id
+                LEFT JOIN sample_evaluation_tracking t ON t.sample_id=s.sample_id
+                WHERE coalesce(t.tracking,'active')='active' AND coalesce(t.next_poll_at,0)<=?
+                AND json_extract(g.data,'$.lease_token') IS NOT NULL
+                ORDER BY coalesce(t.next_poll_at,0),s.updated_at DESC,s.rowid DESC LIMIT 1""",
+                (now,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            'sample_id': row['sample_id'],
+            'inspection_id': row['session_id'],
+            'lease_token': json.loads(row['data'])['lease_token'],
+            'failures': row['failures'],
+        }
+
+    def save_sample_evaluation(self, sample_id, response, tracking, next_poll_at):
+        with self.db() as db:
+            db.execute(
+                """INSERT INTO sample_evaluation_tracking
+                (sample_id,tracking,response,failures,last_error,next_poll_at,updated_at)
+                VALUES (?,?,?,0,NULL,?,?) ON CONFLICT(sample_id) DO UPDATE SET
+                tracking=excluded.tracking,response=excluded.response,failures=0,last_error=NULL,
+                next_poll_at=excluded.next_poll_at,updated_at=excluded.updated_at""",
+                (sample_id, tracking, json.dumps(response), next_poll_at, utcnow()),
+            )
+
+    def sample_evaluation_failure(self, sample_id, error, tracking, next_poll_at):
+        """Registra a falha de consulta sem apagar a última resposta válida."""
+        with self.db() as db:
+            db.execute(
+                """INSERT INTO sample_evaluation_tracking
+                (sample_id,tracking,failures,last_error,next_poll_at,updated_at)
+                VALUES (?,?,1,?,?,?) ON CONFLICT(sample_id) DO UPDATE SET
+                tracking=excluded.tracking,failures=sample_evaluation_tracking.failures+1,
+                last_error=excluded.last_error,next_poll_at=excluded.next_poll_at,
+                updated_at=excluded.updated_at""",
+                (sample_id, tracking, error, next_poll_at, utcnow()),
+            )
+
+    def sample_evaluation(self, sample_id):
+        with self.db() as db:
+            row = db.execute(
+                """SELECT s.sample_id,s.photo_id,o.session_id,o.original_source_known,
+                t.tracking,t.response,t.last_error
+                FROM sample_status s
+                LEFT JOIN camera_sample_outbox o ON o.id=s.photo_id
+                LEFT JOIN sample_evaluation_tracking t ON t.sample_id=s.sample_id
+                WHERE s.sample_id=?""",
+                (sample_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            'sample_id': row['sample_id'],
+            'photo_id': row['photo_id'],
+            'inspection_id': row['session_id'] if row['original_source_known'] else None,
+            'tracking': row['tracking'] or 'active',
+            'response': json.loads(row['response']) if row['response'] else None,
+            'last_error': row['last_error'],
+        }
+
+    def latest_sample_status(self, *, receipt=False, pending=False):
+        predicate = "confirmation IN ('processing','pending')" if pending else (
+            'photo_id IS NOT NULL' if receipt else 'result IS NOT NULL'
+        )
+        with self.db() as db:
+            row = db.execute(
+                'SELECT sample_id,photo_id,confirmation,result,analysis_id,updated_at '
+                'FROM sample_status WHERE ' + predicate
+                + ' ORDER BY updated_at DESC,rowid DESC LIMIT 1'
+            ).fetchone()
+        if row is None:
+            return None
+        return {**dict(row), 'result': json.loads(row['result']) if row['result'] else None}
 
     def pairing_attempt(self, attempt=None):
         with self.db() as db:

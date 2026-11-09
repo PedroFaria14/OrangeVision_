@@ -11,7 +11,8 @@ from backend.device.storage import Store
 @pytest.fixture
 def cli_settings(tmp_path, monkeypatch):
     settings = SimpleNamespace(
-        database=tmp_path / 'cli.db', lock_path=tmp_path / 'worker.lock', device_id=str(uuid4())
+        database=tmp_path / 'cli.db', lock_path=tmp_path / 'worker.lock', device_id=str(uuid4()),
+        api_url='https://api.example.test',
     )
     monkeypatch.setattr(cli.DeviceSettings, 'load', lambda: settings)
     return settings
@@ -53,6 +54,7 @@ def test_status_reports_pending_attempt_without_disclosing_code_or_lease(
 ):
     store = Store(cli_settings.database)
     store.initialize()
+    store.bind_device(cli_settings.device_id, cli_settings.api_url)
     store.pairing_attempt(
         {
             'pairing_code': 'private-code',

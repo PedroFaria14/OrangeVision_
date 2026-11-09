@@ -1,7 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin, ProxyOptions } from 'vite';
 
-export const DEFAULT_API_TARGET = 'https://orangevision.onrender.com';
 const loopback = /^(localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/i;
 
 function localRequest(
@@ -43,7 +42,7 @@ function localRequest(
   next();
 }
 
-export function createDevApiProxy(value = DEFAULT_API_TARGET): {
+export function createDevApiProxy(value: string): {
   plugin: Plugin;
   proxy: ProxyOptions;
 } {

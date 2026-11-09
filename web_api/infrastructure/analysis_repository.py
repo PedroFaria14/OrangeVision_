@@ -32,17 +32,23 @@ class AnalysisRepository:
     def __init__(self, settings):
         self.settings = settings
 
+    @staticmethod
+    def _source(db):
+        ready = db.execute("SELECT to_regclass('orangevision_web.effective_analyses') IS NOT NULL AS ready").fetchone()['ready']
+        return 'orangevision_web.effective_analyses' if ready else 'public.analises'
+
     def list_analyses(self, user_id, filters, limit, offset):
         where, params = scope(
             user_id, filters, inspection_owner_only=self.settings.inspections_enabled
         )
         with connection(self.settings) as db:
             db.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+            source = self._source(db)
             total = db.execute(
-                f'SELECT count(*) AS total FROM analises a WHERE {where}', params
+                f'SELECT count(*) AS total FROM {source} a WHERE {where}', params
             ).fetchone()['total']
             rows = db.execute(
-                f'SELECT a.* FROM analises a WHERE {where} ORDER BY a.data_hora DESC,a.id DESC LIMIT %s OFFSET %s',
+                f'SELECT a.* FROM {source} a WHERE {where} ORDER BY a.data_hora DESC,a.id DESC LIMIT %s OFFSET %s',
                 [*params, limit, offset],
             ).fetchall()
         return [adapt(row) for row in rows], total
@@ -55,7 +61,7 @@ class AnalysisRepository:
         )
         with connection(self.settings) as db:
             row = db.execute(
-                f'SELECT a.* FROM analises a WHERE a.id=%s AND {ownership}',
+                f'SELECT a.* FROM {self._source(db)} a WHERE a.id=%s AND {ownership}',
                 (analysis_id, user_id),
             ).fetchone()
         return adapt(row) if row else None
@@ -70,7 +76,7 @@ class AnalysisRepository:
                 count(*) FILTER (WHERE classificacao='APROVADA') AS approved,
                 count(*) FILTER (WHERE classificacao='ATENCAO') AS attention,
                 count(*) FILTER (WHERE classificacao='REVISAR') AS review,
-                max(data_hora) AS latest_analysis_at FROM analises a WHERE {where}""",
+                max(data_hora) AS latest_analysis_at FROM {self._source(db)} a WHERE {where}""",
                 params,
             ).fetchone()
 
@@ -85,7 +91,7 @@ class AnalysisRepository:
                 count(*) FILTER (WHERE classificacao='APROVADA') AS approved,
                 count(*) FILTER (WHERE classificacao='ATENCAO') AS attention,
                 count(*) FILTER (WHERE classificacao='REVISAR') AS review
-                FROM analises a WHERE {where} GROUP BY 1 ORDER BY 1""",
+                FROM {self._source(db)} a WHERE {where} GROUP BY 1 ORDER BY 1""",
                 params,
             ).fetchall()
 
@@ -110,7 +116,7 @@ class AnalysisRepository:
                 count(a.id) FILTER (WHERE a.classificacao='ATENCAO') AS attention,
                 count(a.id) FILTER (WHERE a.classificacao='REVISAR') AS review,
                 max(a.data_hora) AS latest_analysis_at
-            FROM periods p LEFT JOIN analises a
+             FROM periods p LEFT JOIN {self._source(db)} a
                 ON a.data_hora>=p.start_at AND a.data_hora<p.end_at AND {where}
             GROUP BY p.period_key""",
                 [

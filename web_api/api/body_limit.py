@@ -16,6 +16,9 @@ class DeviceBodyLimit:
             '/api/device/samples/review-capture',
         )
         sample_device = path.startswith('/api/device/samples/')
+        device_registration = path == '/api/devices' or (
+            path.startswith('/api/devices/') and path.endswith('/credentials')
+        )
         if (
             scope['type'] != 'http'
             or scope.get('method') != 'POST'
@@ -23,11 +26,12 @@ class DeviceBodyLimit:
                 path not in ('/api/ingest/analyses', '/api/device/inspections/pair')
                 and not sample_upload
                 and not sample_device
+                and not device_registration
             )
         ):
             await self.app(scope, receive, send)
             return
-        maximum = 5242880 if sample_upload else 2200000 if sample_device else self.maximum
+        maximum = 16384 if device_registration else 5242880 if sample_upload else 2200000 if sample_device else self.maximum
         messages, size = [], 0
         while True:
             message = await receive()

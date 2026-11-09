@@ -158,6 +158,9 @@ def test_repository_keeps_authorization_inside_left_join_and_uses_periods_not_pa
         def fetchall(self):
             return [{'period_key': key, **counts()} for key in ('current', 'previous')]
 
+        def fetchone(self):
+            return {'ready': False}
+
     @contextmanager
     def fake_connection(settings):
         yield Database()
@@ -174,7 +177,7 @@ def test_repository_keeps_authorization_inside_left_join_and_uses_periods_not_pa
         UUID(int=1), filters, current, previous
     )
     sql, params = calls[-1]
-    assert 'LEFT JOIN analises a' in sql
+    assert 'LEFT JOIN public.analises a' in sql
     assert 'da.user_id=%s' in sql and 'da.device_id=a.dispositivo_id' in sql
     assert 'a.data_hora>=p.start_at AND a.data_hora<p.end_at' in sql
     assert 'LIMIT' not in sql and 'OFFSET' not in sql

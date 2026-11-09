@@ -1,81 +1,148 @@
+import {
+  Alert,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Button,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+  useMediaQuery,
+} from '@mui/material';
+import { useState } from 'react';
 import type { Filters } from '../api/analyses';
-import { useFilterForm } from '../hooks/useFilterForm';
 import { previousCalendarDay, recentPeriod } from '../model/period';
-import styles from '@/shared/ui/dashboard.module.css';
+import { useFilterForm } from '../hooks/useFilterForm';
+import { Icon } from '@/shared/ui/Icon';
 
+// Datas de calendário sempre em São Paulo. O contrato usa início inclusivo/fim exclusivo.
 export function FilterBar({
   filters,
   apply,
 }: {
   filters: Filters;
-  apply: (value: Filters) => void;
+  apply: (filters: Filters) => void;
 }) {
   const { error, handleSubmit } = useFilterForm(apply);
+  const mobile = useMediaQuery('(max-width:599px)');
+  const [customExpanded, setCustomExpanded] = useState(false);
+  const endDate = filters.end ? previousCalendarDay(filters.end) : '';
   return (
-    <form className={styles.filters} onSubmit={handleSubmit}>
-      <fieldset>
-        <legend>Filtros · horário de Brasília</legend>
-        <p className={styles.shortcuts}>
-          {(
-            [
-              [1, 'Hoje'],
-              [7, '7 dias'],
-              [30, '30 dias'],
-            ] as const
-          ).map(([days, label]) => (
-            <button
-              type="button"
+    <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
+      <Stack spacing={2} component="form" onSubmit={handleSubmit}>
+        <Typography
+          sx={{
+            fontSize: 12,
+            color: 'text.secondary',
+            fontWeight: 600,
+            letterSpacing: 0.4,
+          }}
+        >
+          Período de análise
+        </Typography>
+        <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+          {[
+            [1, 'Hoje'],
+            [7, '7 dias'],
+            [30, '30 dias'],
+          ].map(([days, label]) => (
+            <Button
               key={days}
-              onClick={() => apply({ ...filters, ...recentPeriod(days) })}
+              type="button"
+              variant="outlined"
+              size="small"
+              onClick={() =>
+                apply({ ...filters, ...recentPeriod(Number(days)) })
+              }
             >
               {label}
-            </button>
-          ))}{' '}
-          <button
+            </Button>
+          ))}
+          <Button
             type="button"
+            size="small"
             onClick={() => apply({ ...recentPeriod(30), classification: '' })}
           >
             Limpar filtros
-          </button>
-        </p>
-        <div className={styles.filterFields}>
-          <p>
-            <label htmlFor="filter-start">Data inicial</label>{' '}
-            <input
-              id="filter-start"
-              name="start"
-              type="date"
-              defaultValue={filters.start.slice(0, 10)}
-              required
-            />
-          </p>
-          <p>
-            <label htmlFor="filter-end">Data final (inclusive)</label>{' '}
-            <input
-              id="filter-end"
-              name="end"
-              type="date"
-              defaultValue={previousCalendarDay(filters.end)}
-              required
-            />
-          </p>
-          <p>
-            <label htmlFor="filter-class">Classificação</label>{' '}
-            <select
-              id="filter-class"
-              name="classification"
-              defaultValue={filters.classification}
+          </Button>
+        </Stack>
+        <Accordion
+          expanded={!mobile || customExpanded}
+          onChange={(_, expanded) => setCustomExpanded(expanded)}
+          slots={{ heading: 'h2' }}
+          disableGutters
+          elevation={0}
+          sx={{ '&:before': { display: 'none' } }}
+        >
+          <AccordionSummary
+            sx={{ display: { xs: 'flex', sm: 'none' } }}
+            aria-controls="filtros-personalizados"
+            id="titulo-filtros-personalizados"
+          >
+            <Typography variant="body2">
+              Personalizar datas e classificação
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails id="filtros-personalizados" sx={{ p: 0 }}>
+            <Stack
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: 'minmax(0,1fr)',
+                  sm: 'repeat(2,minmax(0,1fr))',
+                  lg: '1fr 1fr 1fr auto',
+                },
+                gap: 2,
+                alignItems: 'start',
+              }}
             >
-              <option value="">Todas</option>
-              <option value="APROVADA">Aprovada</option>
-              <option value="ATENCAO">Atenção</option>
-              <option value="REVISAR">Revisar</option>
-            </select>
-          </p>
-          <button type="submit">Aplicar filtros</button>
-        </div>
-        {error && <p role="alert">{error}</p>}
-      </fieldset>
-    </form>
+              <TextField
+                label="Data inicial"
+                name="start"
+                type="date"
+                defaultValue={filters.start.slice(0, 10)}
+                required
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                label="Data final (inclusive)"
+                name="end"
+                type="date"
+                defaultValue={endDate}
+                required
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                label="Classificação"
+                name="classification"
+                select
+                defaultValue={filters.classification}
+                sx={{ minWidth: 160 }}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  select: { displayEmpty: true },
+                }}
+              >
+                <MenuItem value="">Todas</MenuItem>
+                <MenuItem value="APROVADA">Aprovada</MenuItem>
+                <MenuItem value="ATENCAO">Atenção</MenuItem>
+                <MenuItem value="REVISAR">Revisar</MenuItem>
+              </TextField>
+              <Button
+                type="submit"
+                variant="contained"
+                startIcon={<Icon name="search" sx={{ fontSize: 18 }} />}
+                sx={{ minHeight: 48 }}
+              >
+                Aplicar filtros
+              </Button>
+            </Stack>
+            {error && <Alert severity="error">{error}</Alert>}
+          </AccordionDetails>
+        </Accordion>
+      </Stack>
+    </Paper>
   );
 }

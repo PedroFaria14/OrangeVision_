@@ -1,3 +1,4 @@
+import time
 from concurrent.futures import Future
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -9,7 +10,38 @@ import pytest
 from backend.device.api import ApiFailure
 from backend.device.camera_review import CameraReview, CaptureNotAuthorized, confirm_photo
 from backend.device.camera_window import action_at, render_frame, run_window
+from backend.device.live_detection import DetectionSnapshot
 from backend.device.storage import Store
+
+
+@pytest.fixture
+def immediate_detection(monkeypatch):
+    """Janela determinística; a thread real é coberta em test_live_detection.py."""
+    class ImmediateDetection:
+        def __init__(self, detector):
+            self.detector, self.sequence, self.result = detector, 0, None
+
+        def start(self):
+            pass
+
+        def close(self):
+            pass
+
+        def reset(self):
+            self.result = None
+
+        def submit(self, frame, stamp, now):
+            self.sequence += 1
+            self.result = DetectionSnapshot(
+                self.sequence, frame.copy(), stamp, now,
+                self.detector.detect(frame), time.monotonic(),
+            )
+            return self.sequence
+
+        def latest(self):
+            return self.result, None
+
+    monkeypatch.setattr('backend.device.camera_window.LiveDetection', ImmediateDetection)
 
 
 @pytest.fixture
@@ -171,7 +203,7 @@ def test_caption_is_above_detected_box_and_buttons_match_review(context, monkeyp
 
     monkeypatch.setattr(cv2, 'putText', record)
     result = render_frame(
-        frame, detection, False, False, False, False, False, 'Pronto', 'Conectado'
+        frame, detection, True, False, False, False, False, 'Pronto', 'Conectado'
     )
     assert result.shape == (720, 960, 3)
     assert any(text == 'Laranja' and position[1] < 50 for text, position in texts)
@@ -200,7 +232,9 @@ class ControlledPool:
                     future.set_exception(error)
 
 
-def test_connect_button_keeps_saved_photo_until_use_without_closing_camera(context, monkeypatch):
+def test_connect_button_keeps_saved_photo_until_use_without_closing_camera(
+    context, monkeypatch, immediate_detection
+):
     from backend.device import camera_window as window
 
     store, original, frame, detection = context
@@ -226,7 +260,7 @@ def test_connect_button_keeps_saved_photo_until_use_without_closing_camera(conte
     monkeypatch.setattr(
         'backend.device.session_dialog.ask_connection_code', lambda _: ('test-code', False)
     )
-    monkeypatch.setattr(window, 'render_frame', lambda *a: np.zeros((720, 960, 3), np.uint8))
+    monkeypatch.setattr(window, 'render_frame', lambda *a, **k: np.zeros((720, 960, 3), np.uint8))
     for name in ('namedWindow', 'resizeWindow', 'setMouseCallback', 'imshow'):
         monkeypatch.setattr(cv2, name, lambda *a, **k: None)
     monkeypatch.setattr(cv2, 'getWindowProperty', lambda *a: 1)
@@ -269,7 +303,7 @@ def test_connect_button_keeps_saved_photo_until_use_without_closing_camera(conte
 
 @pytest.mark.parametrize('authorized', [True, False])
 def test_manual_capture_works_during_poll_and_never_hides_confirmation_error(
-    context, monkeypatch, authorized
+    context, monkeypatch, authorized, immediate_detection
 ):
     from backend.device import camera_window as window
 
@@ -291,7 +325,7 @@ def test_manual_capture_works_during_poll_and_never_hides_confirmation_error(
     api = SimpleNamespace(heartbeat_samples=lambda *a: None, claim_sample=lambda _: None)
     notices = []
 
-    def render(*args):
+    def render(*args, **kwargs):
         notices.append((args[-2], args[-1]))
         return np.zeros((720, 960, 3), np.uint8)
 
@@ -326,7 +360,7 @@ def test_manual_capture_works_during_poll_and_never_hides_confirmation_error(
         None,
         lambda *a: pytest.fail('Captura manual não usa automático.'),
     )
-    assert len(pool.tasks) == 2  # consulta + confirmação, sem perder C/U.
+    assert len(pool.tasks) >= 2  # consulta + confirmação; envio é agendado logo após confirmar.
     if authorized:
         assert len(store.pending_camera_samples()) == 1
         assert captured == [True]
@@ -334,6 +368,98 @@ def test_manual_capture_works_during_poll_and_never_hides_confirmation_error(
         assert store.latest_photo_draft()['image']
         assert captured == []
         assert any(
-            'Foto guardada' in capture and connection == 'Executor conectado.'
+            'Foto guardada' in capture and connection.startswith('Servidor respondeu')
             for capture, connection in notices
         )
+
+
+def test_lagged_detection_saves_matching_frame_and_does_not_repeat_gate_observations(
+    context, monkeypatch
+):
+    from backend.device import camera_window as window
+
+    store, _, frame, detection = context
+    instances = []
+
+    class LaggedDetection:
+        def __init__(self, detector):
+            self.sequence = 0
+            self.frames = {}
+            self.closed = False
+            instances.append(self)
+
+        def start(self):
+            pass
+
+        def close(self):
+            self.closed = True
+
+        def reset(self):
+            pass
+
+        def submit(self, image, stamp, now):
+            self.sequence += 1
+            self.frames[self.sequence] = DetectionSnapshot(
+                self.sequence, image.copy(), stamp, now, detection, time.monotonic()
+            )
+            return self.sequence
+
+        def latest(self):
+            return self.frames[3 if self.sequence >= 5 else 1], None
+
+    monkeypatch.setattr(window, 'LiveDetection', LaggedDetection)
+    monkeypatch.setattr(window, 'render_frame', lambda *a, **k: frame)
+    for name in ('namedWindow', 'resizeWindow', 'setMouseCallback', 'imshow'):
+        monkeypatch.setattr(cv2, name, lambda *a, **k: None)
+    monkeypatch.setattr(cv2, 'getWindowProperty', lambda *a: 1)
+    step = [0]
+
+    def capture():
+        step[0] += 1
+        return np.full_like(frame, step[0])
+
+    def key(delay):
+        if step[0] == 2:
+            return ord('c')
+        if step[0] in (3, 4):
+            assert store.latest_photo_draft() is None
+        if step[0] == 5:
+            draft = store.latest_photo_draft()
+            assert draft is not None
+            image = cv2.imdecode(np.frombuffer(draft['image'], np.uint8), cv2.IMREAD_COLOR)
+            assert np.all(image == 3)  # Preview was frame 5, but inference belongs to frame 3.
+            assert draft['captured_at'] == instances[0].frames[3].captured_at
+            return ord('q')
+        return -1
+
+    monkeypatch.setattr(cv2, 'waitKey', key)
+    observations = []
+    run_window(
+        SimpleNamespace(capture=capture), None, SimpleNamespace(store=store), None,
+        ControlledPool(), SimpleNamespace(
+            armed=False, observe=lambda *a: observations.append(a) or False,
+        ), False, False, None, None,
+    )
+    assert len(observations) == 2  # Repeated display of frame 1 is not three observations.
+    assert instances[0].closed
+
+
+def test_qt_window_already_destroyed_is_normal_exit(context, monkeypatch, immediate_detection):
+    from backend.device import camera_window as window
+
+    store, _, frame, detection = context
+    monkeypatch.setattr(window, 'render_frame', lambda *a, **k: frame)
+    for name in ('namedWindow', 'resizeWindow', 'setMouseCallback', 'imshow'):
+        monkeypatch.setattr(cv2, name, lambda *a, **k: None)
+    monkeypatch.setattr(cv2, 'waitKey', lambda _: -1)
+
+    def closed(*args):
+        raise cv2.error('NULL guiReceiver')
+
+    monkeypatch.setattr(cv2, 'getWindowProperty', closed)
+    run_window(
+        SimpleNamespace(capture=lambda: frame), SimpleNamespace(detect=lambda _: detection),
+        SimpleNamespace(store=store), None, ControlledPool(),
+        SimpleNamespace(armed=False, observe=lambda *a: False),
+        False, False, None, None,
+    )

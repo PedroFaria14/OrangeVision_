@@ -14,7 +14,7 @@ Este é o modo recomendado para preparar capturas segurando a fruta na mão.
 Deixe a webcam apoiada; não é preciso ajustar as barras HSV para começar.
 
 ```powershell
-Set-Location "D:\Estudo_Pedro\USF\Arquitetura\Projeto\Orange\OrangeVision_"
+Set-Location "D:\Estudo_Pedro\USF\Arquitetura\Projeto\OrangeVision"
 .\backend\.venv-device\Scripts\python.exe -m backend.device.lab --camera 0
 ```
 
@@ -91,7 +91,7 @@ N avança e P volta. São aceitos JPG, JPEG, PNG, BMP e WebP.
 Primeiro teste com a imagem já presente no projeto:
 
 ```powershell
-Set-Location "D:\Estudo_Pedro\USF\Arquitetura\Projeto\Orange\OrangeVision_"
+Set-Location "D:\Estudo_Pedro\USF\Arquitetura\Projeto\OrangeVision"
 .\backend\.venv-device\Scripts\python.exe -m backend.device.lab --images "calibracao-local\Laranja-Seleta.webp"
 ```
 

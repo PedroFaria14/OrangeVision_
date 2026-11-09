@@ -1,22 +1,35 @@
 import { Suspense } from 'react';
-import { createBrowserRouter, Link } from 'react-router-dom';
-import { Layout, ProtectedLayout, RouteError } from './layout';
-import type { ContentSlug } from '@/features/institutional/content';
+import { createBrowserRouter, Link as RouterLink } from 'react-router-dom';
+import { Alert, Button, LinearProgress } from '@mui/material';
+import { Layout } from './layout';
+import type { ContentSlug } from '@/features/institutional/model/content';
 import {
   Home,
   Content,
-  Auth,
-  Profile,
   Dashboard,
+  Auth,
+  Protected,
   Detail,
+  Profile,
   Inspections,
   Samples,
+  Devices,
+  AdminPrisma,
 } from './lazy_pages';
+import { RouteError } from './components/RouteError';
+import { AuthLayout } from './layouts/AuthLayout';
+import { PrivateLayout } from './layouts/PrivateLayout';
 const load = (node: React.ReactNode) => (
-  <Suspense fallback={<p role="status">Carregando página…</p>}>{node}</Suspense>
+  <Suspense fallback={<LinearProgress aria-label="Carregando página" />}>
+    {node}
+  </Suspense>
 );
-
 export const router = createBrowserRouter([
+  {
+    path: 'admin/prisma',
+    element: load(<AdminPrisma />),
+    errorElement: <RouteError />,
+  },
   {
     element: <Layout />,
     errorElement: <RouteError />,
@@ -32,10 +45,33 @@ export const router = createBrowserRouter([
           'referencias',
         ] satisfies ContentSlug[]
       ).map((slug) => ({ path: slug, element: load(<Content slug={slug} />) })),
+      {
+        path: '*',
+        element: (
+          <Alert severity="info">
+            Página não encontrada.{' '}
+            <Button component={RouterLink} to="/">
+              Voltar ao início
+            </Button>
+          </Alert>
+        ),
+      },
+    ],
+  },
+  {
+    element: <AuthLayout />,
+    errorElement: <RouteError />,
+    children: [
       { path: 'login', element: load(<Auth />) },
       { path: 'registrar', element: load(<Auth registering />) },
+    ],
+  },
+  {
+    element: load(<Protected />),
+    errorElement: <RouteError />,
+    children: [
       {
-        element: <ProtectedLayout />,
+        element: <PrivateLayout />,
         children: [
           { path: 'dashboard', element: load(<Dashboard />) },
           {
@@ -46,16 +82,8 @@ export const router = createBrowserRouter([
           { path: 'dashboard/perfil', element: load(<Profile />) },
           { path: 'dashboard/inspecoes', element: load(<Inspections />) },
           { path: 'dashboard/amostras', element: load(<Samples />) },
+          { path: 'dashboard/dispositivos', element: load(<Devices />) },
         ],
-      },
-      {
-        path: '*',
-        element: (
-          <section>
-            <h1>Página não encontrada</h1>
-            <Link to="/">Voltar ao início</Link>
-          </section>
-        ),
       },
     ],
   },

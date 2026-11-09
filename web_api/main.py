@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from .api.analysis_routes import router as analysis_router
 from .api.auth_routes import router as auth_router
 from .api.body_limit import DeviceBodyLimit
+from .api.device_routes import router as device_router
 from .api.http import configure_http
 from .api.inspection_routes import router as inspection_router
 from .api.sample_routes import router as sample_router
@@ -15,6 +16,7 @@ from .contracts import (
     HttpErrorResponse,
     ValidationErrorResponse,
 )
+from .gemini_worker import start_in_process
 from .observability import configure_logging
 
 
@@ -23,7 +25,13 @@ def create_app(settings=None):
     async def lifespan(app):
         app.state.settings = settings or Settings.load()
         configure_logging()
-        yield
+        # Opcional: worker Gemini na mesma instância (plano grátis, sem Background Worker).
+        worker = start_in_process(app.state.settings)
+        try:
+            yield
+        finally:
+            if worker:
+                worker.stop()
 
     app = FastAPI(
         title='OrangeVision Online API',
@@ -68,6 +76,7 @@ def create_app(settings=None):
         return {'status': 'ok', 'service': 'orangevision-web'}
 
     app.include_router(auth_router)
+    app.include_router(device_router)
     app.include_router(analysis_router)
     app.include_router(inspection_router)
     app.include_router(sample_router)

@@ -11,6 +11,18 @@ export const sampleStates = {
   failed: 'Falha no processamento',
 } as const;
 const metric = z.number().finite().nullable();
+const category = z.enum(['APROVADA', 'ATENCAO', 'REVISAR']);
+const evaluationSchema = z.object({
+  id: z.string().uuid(),
+  origin: z.enum(['local', 'gemini']),
+  state: z.enum(['completed', 'awaiting_review', 'not_evaluable', 'failed']),
+  classification: category.nullable(),
+  reason: z.string(),
+  criteria_version: z.string(),
+  model_version: z.string().nullable(),
+  created_at: z.string().datetime({ offset: true }),
+});
+export type Evaluation = z.infer<typeof evaluationSchema>;
 export const sampleSchema = z.object({
   id: z.string().uuid(),
   filename: z.string(),
@@ -61,6 +73,30 @@ export const sampleSchema = z.object({
     })
     .nullish(),
   source_inspection_id: z.string().uuid().nullish(),
+  analysis_id: z.string().uuid().nullish(),
+  evaluations: z.array(evaluationSchema).optional().default([]),
+  comparison: z
+    .enum(['pending', 'agreement', 'divergence', 'inconclusive'])
+    .optional()
+    .default('pending'),
+  gemini_job: z
+    .object({
+      id: z.string().uuid(),
+      state: z.enum(['queued', 'running', 'retry_wait', 'completed', 'failed']),
+      attempts: z.number().int(),
+      error_code: z.string().nullable(),
+      updated_at: z.string().datetime({ offset: true }),
+    })
+    .nullish(),
+  decision: z
+    .object({
+      revision: z.number().int(),
+      origin: z.enum(['local', 'gemini', 'human']),
+      classification: category,
+      reason: z.string(),
+      created_at: z.string().datetime({ offset: true }),
+    })
+    .nullish(),
   captured_at: z.string().datetime({ offset: true }).nullish(),
   review_authorization_id: z.string().uuid().nullish(),
 });
@@ -70,6 +106,17 @@ export async function samplesConfig(signal?: AbortSignal) {
   return z
     .object({
       enabled: z.boolean(),
+      dashboard_enabled: z.boolean().optional(),
+      dashboard_status: z
+        .enum([
+          'enabled',
+          'inspections_disabled',
+          'schema_unavailable',
+          'permissions_missing',
+        ])
+        .optional(),
+      evaluations_enabled: z.boolean().optional(),
+      gemini_enabled: z.boolean().optional(),
       processing: z.literal('device'),
       max_upload_bytes: z.number().int().positive(),
     })
@@ -126,6 +173,49 @@ export async function queueSample(id: string, deviceId: string, csrf: string) {
       method: 'POST',
       body: JSON.stringify({ device_id: deviceId }),
       headers: { 'X-CSRF-Token': csrf },
+    }),
+  );
+}
+
+export async function publishSample(id: string, csrf: string) {
+  return sampleSchema.parse(
+    await requestJson(`/samples/${id}/analysis`, {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrf },
+    }),
+  );
+}
+
+export type DecisionCommand = {
+  request_id: string;
+  expected_revision: number;
+  evaluation_id: string | null;
+  classification: 'APROVADA' | 'ATENCAO' | 'REVISAR';
+  reason: string;
+};
+export async function requestGemini(
+  id: string,
+  requestId: string,
+  csrf: string,
+) {
+  return sampleSchema.parse(
+    await requestJson(`/samples/${id}/evaluations/gemini`, {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrf },
+      body: JSON.stringify({ request_id: requestId }),
+    }),
+  );
+}
+export async function adoptDecision(
+  id: string,
+  command: DecisionCommand,
+  csrf: string,
+) {
+  return sampleSchema.parse(
+    await requestJson(`/samples/${id}/decisions`, {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrf },
+      body: JSON.stringify(command),
     }),
   );
 }

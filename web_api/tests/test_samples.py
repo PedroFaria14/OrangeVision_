@@ -66,6 +66,15 @@ class SampleStore:
     def ready(self):
         return self.enabled
 
+    def dashboard_ready(self):
+        return False
+
+    def dashboard_status(self):
+        return 'schema_unavailable'
+
+    def evaluation_config(self):
+        return {'evaluations_enabled': False, 'gemini_enabled': False}
+
     def authenticate_device(self, token_hash):
         return {'device_id': DEVICE} if token_hash == digest(TOKEN) else None
 
@@ -225,6 +234,47 @@ def test_heartbeat_requires_device_credential_not_browser_session(samples):
     assert response.status_code == 200
     assert store.last_heartbeat['model_version'] == 'test-detector'
     assert 'lease' not in response.text
+
+
+def test_device_evaluations_require_device_credential_and_lease(samples):
+    client, _, _ = samples
+    url = f'/api/device/samples/{uuid4()}/evaluations'
+    lease = {'X-Inspection-Lease': 'x' * 40}
+    # A sessão de usuário simulada pela fixture não substitui a credencial do equipamento.
+    assert client.get(url, headers=lease).status_code == 401
+    assert client.get(url, headers={**lease, 'Authorization': 'Bearer invalid'}).status_code == 401
+    assert client.get(url, headers={'Authorization': f'Bearer {TOKEN}'}).status_code == 422
+
+
+def test_device_evaluations_hash_lease_and_hide_private_fields(samples):
+    client, store, _ = samples
+    identity, inspection, now = uuid4(), uuid4(), datetime.now(UTC)
+
+    def device_evaluations(device, sample_id, lease_hash):
+        assert (device, sample_id, lease_hash) == (DEVICE, identity, digest('x' * 40))
+        return {
+            'sample_id': sample_id,
+            'inspection_id': inspection,
+            'state': 'completed',
+            'captured_at': now,
+            'evaluations': [],
+            'gemini_job': None,
+            'decision': None,
+            'comparison': 'pending',
+            'access_expires_at': now,
+            'observed_at': now,
+            'user_id': OWNER,
+            'lease_hash': 'private',
+        }
+
+    store.device_evaluations = device_evaluations
+    response = client.get(
+        f'/api/device/samples/{identity}/evaluations',
+        headers={'Authorization': f'Bearer {TOKEN}', 'X-Inspection-Lease': 'x' * 40},
+    )
+    assert response.status_code == 200, response.text
+    assert response.headers['Cache-Control'] == 'no-store'
+    assert not {'user_id', 'lease_hash', 'image_url'} & set(response.json())
 
 
 def test_camera_upload_does_not_accept_browser_cookie_as_equipment(samples):

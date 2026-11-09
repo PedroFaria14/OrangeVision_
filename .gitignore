@@ -1,34 +1,30 @@
-# Configuração privada e dados locais (copiados no computador, não publicados).
+# Configuração privada em qualquer serviço. Exemplos continuam versionáveis.
 .env
 .env.*
 !.env.example
-.venv*/
-**/.venv*/
+.venv/
+.venv-web/
+.venv-device/
 __pycache__/
-*.py[cod]
+*.pyc
 .pytest_cache/
 .ruff_cache/
-.mypy_cache/
-node_modules/
-dist/
-build/
-test-results*/
-playwright-report/
-.playwright*/
-.transfer-state/
-*.log
-*.db
-*.db-*
-*.sqlite
-*.sqlite-*
-*.sqlite3
-*.sqlite3-*
-*.onnx
-*.pth
-*.pem
-*.key
-calibracao-local/
-Docs/*.png
-Docs/*.jpg
-Docs/*.webp
-# Código de backend/device faz parte deste repositório; não ignorar /backend/.
+
+# Raspberry: código versionado; segredos, dados locais e modelo ficam fora.
+/backend/env
+/backend/**/data/
+/backend/**/*.onnx
+/backend/**/*.db
+/backend/**/.configuration.lock
+
+# Ferramentas locais de banco e de contexto para IA.
+/.opencode/
+/tools/db-studio/node_modules/
+/graphify-out/
+/.graphify_cache/
+/.graphify_*.json
+/admin/node_modules/
+/admin/.next/
+/admin/.vercel/
+/admin/tsconfig.tsbuildinfo
+/admin/test-results/

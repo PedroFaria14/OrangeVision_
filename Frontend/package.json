@@ -1,5 +1,5 @@
 {
-  "name": "orangevision-functional-frontend",
+  "name": "orangevision-frontend",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,22 +8,39 @@
     "node": ">=22.12"
   },
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5174 --strictPort",
-    "build": "tsc --noEmit && vite build",
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "node scripts/check-functions.mjs && tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:e2e": "yarn build && playwright test",
-    "test:proxy": "node --experimental-strip-types --test tests/dev-api-proxy.check.ts"
+    "test:proxy": "node --experimental-strip-types --test tests/dev-api-proxy.check.ts tests/dev-api-status.check.ts",
+    "status:api": "node --experimental-strip-types scripts/check-api-status.ts",
+    "test:functions": "node scripts/check-functions.mjs",
+    "test:admin": "node --import tsx --test tests/admin/*.test.ts",
+    "test:admin:database": "node scripts/test-prisma.mjs",
+    "test:admin:e2e": "node scripts/test-prisma.mjs --browser",
+    "test:admin:unconfigured": "node scripts/test-prisma.mjs --browser --unconfigured"
   },
   "dependencies": {
+    "@auth/core": "0.41.3",
     "@date-fns/tz": "^1.5.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@fontsource/montserrat": "^5.3.0",
+    "@fontsource/roboto": "^5.3.0",
+    "@mui/material": "^9.5.0",
+    "@prisma/studio-core": "0.34.1",
     "@tanstack/react-query": "^5.104.3",
+    "nuqs": "2.10.2",
+    "pg": "8.23.1",
     "react": "^19.3.1",
-    "react-dom": "^19.3.0",
+    "react-dom": "^19.3.1",
+    "react-is": "^19.0.0",
     "react-router-dom": "^7.18.4",
+    "recharts": "^3.10.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -31,6 +48,7 @@
     "@eslint/js": "9",
     "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
+    "@types/pg": "8.16.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
@@ -40,6 +58,7 @@
     "globals": "^17.13.0",
     "playwright-core": "1.64.1",
     "prettier": "^3.9.10",
+    "tsx": "4.23.15",
     "typescript": "~6.0.0",
     "typescript-eslint": "^8.71.2",
     "vite": "^8.3.4"
